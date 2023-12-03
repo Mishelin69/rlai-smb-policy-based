@@ -26,17 +26,11 @@ private:
     uint32_t kernel_y;
     uint32_t kernel_shift;
 
-    uint32_t input_x;
-    uint32_t input_y;
-
-    uint32_t output_x;
-    uint32_t output_y;
-
 public:
 
     ConvolutionalLayer(
-            const uint32_t inp_x, const uint32_t inp_y, const uint32_t maps_before, 
-            const uint32_t feature_maps, const uint32_t cons_to_prev, const uint32_t kernel_dim, 
+            const uint32_t maps_before, const uint32_t feature_maps, 
+            const uint32_t cons_to_prev, const uint32_t kernel_dim, 
             const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref);
 
     ~ConvolutionalLayer() = default;
@@ -47,5 +41,8 @@ public:
             const uint32_t kernel_x, const uint32_t kernel_y,
             const uint32_t input_x, const uint32_t input_y, const uint32_t kernel_shift
         ) noexcept;
+
+    void convolve(float* a, float* out, const uint32_t a_x,
+            const uint32_t a_y, const uint32_t offset) const noexcept;
 
 };

@@ -16,12 +16,10 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
 }
 
 ConvolutionalLayer::ConvolutionalLayer(
-            const uint32_t inp_x, const uint32_t inp_y, const uint32_t maps_before, 
-            const uint32_t feature_maps, const uint32_t cons_to_prev, const uint32_t kernel_dim, 
+            const uint32_t maps_before, const uint32_t feature_maps, 
+            const uint32_t cons_to_prev, const uint32_t kernel_dim, 
             const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref) {
 
-    this->input_x = inp_x;
-    this->input_y = inp_y;
     this->maps_before = maps_before;
     this->feature_maps = feature_maps;
     this->to_prev_cons = cons_to_prev;
@@ -29,13 +27,6 @@ ConvolutionalLayer::ConvolutionalLayer(
     this->kernel_y = kernel_dim;
     this->con_ref = con_ref;
     this->kernel_shift = kernel_shift;
-
-    const std::pair<uint32_t, uint32_t> out_dims = ConvolutionalLayer::calc_output_size(
-            this->kernel_x, this->kernel_y, this->input_x, this->input_y, this->kernel_shift
-    );
-
-    this->output_x = out_dims.first;
-    this->output_y = out_dims.second;
 
     //calculate the amount of memory needed (in bytes) to keep the stuff in
     const uint32_t kernel_size_bytes = sizeof(float) * kernel_dim * kernel_dim;
@@ -50,4 +41,17 @@ ConvolutionalLayer::ConvolutionalLayer(
     }
     
     this->cuda_kernel = cuda_p;
+}
+
+void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
+        const uint32_t a_y, const uint32_t offset) const noexcept {
+
+    const std::pair<uint32_t, uint32_t> out_dims = ConvolutionalLayer::calc_output_size(
+            this->kernel_x, this->kernel_y, a_x, a_y, this->kernel_shift
+    );
+
+    const uint32_t dim_x = out_dims.first;
+    const uint32_t dim_y = out_dims.first;
+
+
 }

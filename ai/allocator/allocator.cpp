@@ -15,7 +15,7 @@ Allocator::~Allocator() {
         if (!b.block_root) {
             std::cerr << "Memory corruption!" << std::endl;
             return;
-       }
+        }
 
         int ret = this->gpu.free_memory(b.block_root);
 
