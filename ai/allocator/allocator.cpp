@@ -4,19 +4,19 @@
 Allocator::Allocator():
     entry_n(0), blocks(std::vector<AllocatorBlock>()), entries(std::vector<AllocatorEntry>()) {
 
-    this->gpu = GPU::Device(0);
+        this->gpu = GPU::Device(0);
 
-}
+    }
 
 Allocator::~Allocator() {
 
     for (auto& b : this->blocks) {
-        
+
         if (!b.block_root) {
             std::cerr << "Memory corruption!" << std::endl;
             return;
-        }
-        
+       }
+
         int ret = this->gpu.free_memory(b.block_root);
 
         if (ret == -1) {
@@ -31,7 +31,7 @@ Allocator::~Allocator() {
 int Allocator::alloc_new_block(const size_t block_size) {
 
     float* cuda_p = this->gpu.allocate_memory(sizeof(float) * block_size);
-    
+
     if (!cuda_p) {
         std::cerr << "Couln't allocate memory on the gpu!" << std::endl;
         return -1;
