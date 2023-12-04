@@ -10,7 +10,7 @@ private:
 
     //kernel
     float* cuda_kernel;
-    //kernel size in bytes
+    //kernel size in byttes
     uint32_t cuda_kernel_size;
     //number of feature maps
     uint32_t feature_maps;

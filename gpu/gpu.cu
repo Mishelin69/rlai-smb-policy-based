@@ -237,7 +237,7 @@ int GPU::Device::free_memory(float* p) noexcept {
 			return cudaSuccess;
 		}
 
-		i =+ 1;
+		i += 1;
 	}
 
 	return -1;

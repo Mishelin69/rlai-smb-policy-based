@@ -51,7 +51,7 @@ void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
     );
 
     const uint32_t dim_x = out_dims.first;
-    const uint32_t dim_y = out_dims.first;
+    const uint32_t dim_y = out_dims.second;
 
 
 }

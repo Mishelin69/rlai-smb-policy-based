@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+#clangd config file
+*.clangd
+**/*.clangd

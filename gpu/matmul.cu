@@ -1,7 +1,5 @@
-#include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#include <cstdint>
 #include <stdio.h>
 
 __global__
