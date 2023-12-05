@@ -7,7 +7,6 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
         const uint32_t input_x, const uint32_t input_y, const uint32_t kernel_shift) noexcept {
 
     const uint32_t _shft = kernel_shift - 1;
-    const uint32_t half = kernel_x / 2;
 
     const uint32_t out_x = input_x + 1 - (kernel_x + _shft);
     const uint32_t out_y = input_x + 1 - (kernel_x + _shft);
@@ -15,18 +14,12 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
     return std::pair<uint32_t, uint32_t> { out_x, out_y };
 }
 
-ConvolutionalLayer::ConvolutionalLayer(
+ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu,
             const uint32_t maps_before, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
-            const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref) {
-
-    this->maps_before = maps_before;
-    this->feature_maps = feature_maps;
-    this->to_prev_cons = cons_to_prev;
-    this->kernel_x = kernel_dim;
-    this->kernel_y = kernel_dim;
-    this->con_ref = con_ref;
-    this->kernel_shift = kernel_shift;
+            const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref)
+    : gpu(gpu), maps_before(maps_before), feature_maps(feature_maps), to_prev_cons(cons_to_prev),
+      kernel_x(kernel_dim), kernel_y(kernel_dim), con_ref(con_ref), kernel_shift(kernel_shift) {
 
     //calculate the amount of memory needed (in bytes) to keep the stuff in
     const uint32_t kernel_size_bytes = sizeof(float) * kernel_dim * kernel_dim;
@@ -54,4 +47,13 @@ void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
     const uint32_t dim_y = out_dims.second;
 
 
+    //finish this
+    //NOTE for tmrw or whenever => ! all of the filters connect 
+    //densely to all of the inputs
+    //remove the con-ref bs everywhere!!
+    for (size_t i = 0; i < this->maps_before; ++i) {
+
+        this->gpu.conv_ver1(cuda_kernel + i
+
+    }
 }

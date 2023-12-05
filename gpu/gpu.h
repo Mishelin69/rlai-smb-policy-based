@@ -35,13 +35,23 @@ private:
 
 	inline static bool validate_matadd(size_t a_col, size_t a_row, size_t b_col, size_t b_row) noexcept;
 
+	static bool validate_convolution(const int kernel_dim, const int dat_dim, const int out_dim) noexcept;
+
 public:
 
 	Device(uint64_t gpu_id = 0, int threads = 512);
 	Device(Device& other) = default;
 	~Device();
 
+    //calls cuda_device_synchronize, yeah
+    void device_sync();
+
 	static std::pair<size_t, size_t> calculate_new_mat_dims(size_t a_col, size_t a_row, size_t b_col, size_t b_row) noexcept;
+
+    //We are assuming m*m matrices for this problem
+    //this is fitted for this project so it's fine to do it like this
+    //we know for a fact that it'll only be m*m matrices
+	static size_t calculate_conv_dims(const int kx, const int mx) noexcept;
 
 	/*
 	* Returns the amount of multiprocessors (mps) inside this device.
@@ -152,11 +162,20 @@ public:
 
 	//-----=====================-----
 
-	void matmul_ver1_cpu(float* a, float* b, float* c, size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row) const noexcept;
+	void matmul_ver1_cpu(float* a, float* b, float* c, size_t a_col, 
+            size_t a_row, size_t b_col, size_t b_row, 
+            size_t c_col, size_t c_row) const noexcept;
 
-	void matmul_ver1_gpu(float* a, float* b, float* c, size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row) const noexcept;
+	void matmul_ver1_gpu(float* a, float* b, float* c, size_t a_col, 
+            size_t a_row, size_t b_col, size_t b_row, 
+            size_t c_col, size_t c_row) const noexcept;
 
-	void matadd_ver1(float* a, float* b, float* c, size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row) const noexcept;
+	void matadd_ver1(float* a, float* b, float* c, size_t a_col, 
+            size_t a_row, size_t b_col, size_t b_row, 
+            size_t c_col, size_t c_row) const noexcept;
+
+    void conv_ver1(const float* kernel, const float* dat, float* output, 
+            const size_t kernel_dim, const size_t dat_dim, const size_t out_dim) const noexcept;
 };
 
 }

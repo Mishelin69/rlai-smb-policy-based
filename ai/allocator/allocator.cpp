@@ -1,10 +1,8 @@
 #include "./allocator.hpp"
 #include <iostream>
 
-Allocator::Allocator():
-    entry_n(0), blocks(std::vector<AllocatorBlock>()), entries(std::vector<AllocatorEntry>()) {
-
-        this->gpu = GPU::Device(0);
+Allocator::Allocator(GPU::Device& gpu):
+    entry_n(0), blocks(std::vector<AllocatorBlock>()), entries(std::vector<AllocatorEntry>()), gpu(gpu) {
 
     }
 

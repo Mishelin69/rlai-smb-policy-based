@@ -21,7 +21,7 @@ class Allocator {
 
 private:
 
-    GPU::Device gpu;
+    GPU::Device& gpu;
     size_t entry_n;
     
     std::vector<AllocatorBlock> blocks;
@@ -29,7 +29,7 @@ private:
 
 public:
 
-    Allocator();
+    Allocator(GPU::Device& gpu);
     ~Allocator();
     Allocator(Allocator& other) = default;
 

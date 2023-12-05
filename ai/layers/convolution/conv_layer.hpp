@@ -1,6 +1,5 @@
 #pragma once
-#include <cstdint>
-#include <utility>
+#include "../../../gpu/gpu.h"
 
 class Allocator;
 
@@ -16,19 +15,16 @@ private:
     uint32_t feature_maps;
     //number of feature maps before
     uint32_t maps_before;
-    //how many cons back 
-    uint32_t to_prev_cons;
-
-    //randomized indexes
-    const uint32_t* con_ref;
 
     uint32_t kernel_x;
     uint32_t kernel_y;
     uint32_t kernel_shift;
 
+    GPU::Device& gpu;
+
 public:
 
-    ConvolutionalLayer(
+    ConvolutionalLayer(GPU::Device& gpu,
             const uint32_t maps_before, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
             const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref);

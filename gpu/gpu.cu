@@ -82,6 +82,10 @@ GPU::Device::~Device() {
 
 }
 
+void GPU::Device::device_sync() {
+    cudaDeviceSynchronize();
+}
+
 int GPU::Device::get_mps() const noexcept {
 	return this->mps;
 }
@@ -251,10 +255,21 @@ inline bool GPU::Device::validate_matadd(size_t a_col, size_t a_row, size_t b_co
 	return a_col == b_col && a_row == b_row;
 }
 
+bool GPU::Device::validate_convolution(const int kernel_dim, const int dat_dim, const int out_dim) noexcept {
+
+    size_t real_out_dim = GPU::Device::calculate_conv_dims(kernel_dim, dat_dim);
+    
+    return real_out_dim == out_dim;
+}
+
 std::pair<size_t, size_t> GPU::Device::calculate_new_mat_dims(
 	size_t a_col, size_t a_row, size_t b_col, size_t b_row) noexcept {
 
 	return std::pair<size_t, size_t> { b_col, a_row };
+}
+
+size_t GPU::Device::calculate_conv_dims(const int kx, const int mx) noexcept {
+    return mx + 1 - kx + 0; 
 }
 
 
@@ -299,8 +314,6 @@ void GPU::Device::matmul_ver1_gpu(float* a, float* b, float* c,
 	std::cout << "Grid dims: " << grid_dimensions.x << " " << grid_dimensions.y << std::endl;
 
 	matmul_v1<<<grid_dimensions, block_dimensions >>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
-
-	cudaDeviceSynchronize();
 }
 
 __global__
@@ -321,6 +334,22 @@ void GPU::Device::matadd_ver1(float* a, float* b, float* c, size_t a_col, size_t
 	dim3 block_dimensions(32, 32, 1);
 
 	matadd_v1 << <grid_dimensions, block_dimensions >> > (a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+}
 
-	cudaDeviceSynchronize();
+__global__
+void convolve_v1(const float* k, const float* m, float* o, int kx, int mx, int ox);
+
+void GPU::Device::conv_ver1(const float* kernel, const float* dat, float* output, 
+        const size_t kernel_dim, const size_t dat_dim, const size_t out_dim) const noexcept {
+
+    if (!GPU::Device::validate_convolution(kernel_dim, dat_dim, out_dim)) {
+        
+        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        return;
+    }
+
+    dim3 grid_dimensions(ceilf(out_dim / 32.0), ceilf(out_dim / 32.0), 1);
+    dim3 block_dimensions(32, 32, 1);
+
+    convolve_v1<<<grid_dimensions, block_dimensions>>>(kernel, dat, output, kernel_dim, dat_dim, out_dim);
 }
