@@ -1,5 +1,6 @@
 #pragma once
 #include "../../../gpu/gpu.h"
+#include "../actv_func/actv_func.hpp"
 
 class Allocator;
 
@@ -9,7 +10,7 @@ private:
 
     //kernel
     float* cuda_kernel;
-    //kernel size in byttes
+    //kernel size in bytes
     uint32_t cuda_kernel_size;
     //number of feature maps
     uint32_t feature_maps;
@@ -21,10 +22,11 @@ private:
     uint32_t kernel_shift;
 
     GPU::Device& gpu;
+    ActivationFunction actv_func;
 
 public:
 
-    ConvolutionalLayer(GPU::Device& gpu,
+    ConvolutionalLayer(GPU::Device& gpu, ActivationFunction func,
             const uint32_t maps_before, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
             const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref);

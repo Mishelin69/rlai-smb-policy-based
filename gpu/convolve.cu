@@ -33,7 +33,7 @@ void convolve_v1(const float* k, const float* m, float* o, int kx, int mx, int o
             }
         }
         
-        o[y*ox + x] = sum;
+        o[y*ox + x] += sum;
    }
 }
 

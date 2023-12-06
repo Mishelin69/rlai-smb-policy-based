@@ -14,12 +14,12 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
     return std::pair<uint32_t, uint32_t> { out_x, out_y };
 }
 
-ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu,
+ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, ActivationFunction actv_func,
             const uint32_t maps_before, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
             const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref)
-    : gpu(gpu), maps_before(maps_before), feature_maps(feature_maps), to_prev_cons(cons_to_prev),
-      kernel_x(kernel_dim), kernel_y(kernel_dim), con_ref(con_ref), kernel_shift(kernel_shift) {
+    : gpu(gpu), maps_before(maps_before), feature_maps(feature_maps), actv_func(actv_func),
+      kernel_x(kernel_dim), kernel_y(kernel_dim), kernel_shift(kernel_shift) {
 
     //calculate the amount of memory needed (in bytes) to keep the stuff in
     const uint32_t kernel_size_bytes = sizeof(float) * kernel_dim * kernel_dim;
@@ -34,6 +34,14 @@ ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu,
     }
     
     this->cuda_kernel = cuda_p;
+
+    //this will be slow but whatever
+    int res = gpu.random_numbers(this->cuda_kernel, feature_maps * kernel_x * kernel_y);
+
+    if (res != 0) {
+        std::cerr << "ConvolutionalLayer::ConvolutionalLayer() | Error while trying to initialize kernel data!" << std::endl;
+        exit(-1);
+    }
 }
 
 void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
@@ -51,9 +59,17 @@ void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
     //NOTE for tmrw or whenever => ! all of the filters connect 
     //densely to all of the inputs
     //remove the con-ref bs everywhere!!
-    for (size_t i = 0; i < this->maps_before; ++i) {
-
-        this->gpu.conv_ver1(cuda_kernel + i
-
+    for (size_t i = 0; i < this->feature_maps; ++i) {
+        for(size_t j = 0; j < this->maps_before; ++j) {
+            gpu.conv_ver1( 
+                    cuda_kernel + (i * (sizeof(float) * kernel_x * kernel_y)), 
+                    a + j * a_x  * a_y,
+                    out + i*dim_x*dim_y + offset,
+                    this->kernel_x, a_x, dim_x);
+        }
     }
+
+    //wait for the GPU to finish it's job
+    //keep the data on the GPU tho
+    gpu.device_sync();
 }

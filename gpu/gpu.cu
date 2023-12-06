@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <random>
 
 GPU::Device::Device(uint64_t gpu_id, int threads): 
 	gpu_id(gpu_id), threads(threads) {
@@ -245,6 +246,63 @@ int GPU::Device::free_memory(float* p) noexcept {
 	}
 
 	return -1;
+}
+
+int GPU::Device::memset(float* p, int value, const size_t n_elems) noexcept {
+
+    if (!validate_pointer(p, n_elems)) {
+        return -1;
+    }
+
+    cudaError_t res = cudaMemset(p, value, sizeof(float) * n_elems);
+
+    if (res != cudaSuccess) {
+        return res;
+    }
+
+    return cudaSuccess;
+}
+
+
+
+int GPU::Device::random_numbers(float* p, const size_t n_elems) noexcept {
+
+    if (!validate_pointer(p, n_elems)) {
+        return -1;
+    }
+
+    float* rnd_mem = new (std::nothrow) float[n_elems];
+
+    if (!rnd_mem) {
+
+        std::cerr << "GPU::Device::random_numbers | Error while allocating memory!" << std::endl;
+        return -1;
+    }
+
+    //random stuff setup
+    std::random_device rd;
+    std::mt19937 gen(rd()); 
+
+    std::uniform_real_distribution<float> dist(0.0, 1.0);
+
+    //fill in values hopefully not repeating D:
+    for (int i = 0; i < n_elems; ++i) {
+        rnd_mem[i] = dist(gen);
+    }
+
+    //try to memcpy from cpu to gpu 
+    int res = memcpy_host(rnd_mem, p, sizeof(float) * n_elems);
+
+    if (res != 0) {
+        std::cerr << "GPU::Device::random_numbers | Error while calling memcpy!" << std::endl;
+        return res;
+    }
+
+    //don't forget to free the memory
+    //def didn't just happen 
+    delete[] rnd_mem;
+
+    return 0;
 }
 
 inline bool GPU::Device::validate_matmul(size_t a_col, size_t b_row) noexcept {

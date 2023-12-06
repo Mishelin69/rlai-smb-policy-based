@@ -160,6 +160,16 @@ public:
 	*/
 	int free_memory(float* p) noexcept;
 
+    /*
+     * Works just like memset, sets n_elems to value
+     */
+    int memset(float* p, int value, const size_t n_elems) noexcept;
+
+    /*
+     * sets first n_elmens on the p pointer to random numbers
+     */
+    int random_numbers(float* p, const size_t n_elems) noexcept;
+
 	//-----=====================-----
 
 	void matmul_ver1_cpu(float* a, float* b, float* c, size_t a_col, 
