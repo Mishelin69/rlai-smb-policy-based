@@ -14,7 +14,7 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
     return std::pair<uint32_t, uint32_t> { out_x, out_y };
 }
 
-ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, ActivationFunction actv_func,
+ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction actv_func,
             const uint32_t maps_before, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
             const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref)
@@ -65,7 +65,7 @@ void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
                     cuda_kernel + (i * (sizeof(float) * kernel_x * kernel_y)), 
                     a + j * a_x  * a_y,
                     out + i*dim_x*dim_y + offset,
-                    this->kernel_x, a_x, dim_x);
+                    this->kernel_x, a_x, dim_x, actv_func);
         }
     }
 

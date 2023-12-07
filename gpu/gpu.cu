@@ -357,9 +357,17 @@ void GPU::Device::matmul_ver1_cpu(float* a, float* b, float* c,
 __global__
 void matmul_v1(float* A, float* B, float* C, 
 	size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
+__global__
+void matmul_v1_ReLU(float* A, float* B, float* C, 
+	size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
+__global__
+void matmul_v1_Sigmoid(float* A, float* B, float* C, 
+	size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
+
 
 void GPU::Device::matmul_ver1_gpu(float* a, float* b, float* c,
-	size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row) const noexcept {
+	size_t a_col, size_t a_row, size_t b_col, size_t b_row, 
+    size_t c_col, size_t c_row, ActivationFunction actv_fn) const noexcept {
 
 	if (!GPU::Device::validate_matmul(a_col, b_row)) {
 		std::cerr << "Error: matmul invalid matrix dimensions!" << std::endl;
@@ -371,7 +379,18 @@ void GPU::Device::matmul_ver1_gpu(float* a, float* b, float* c,
 
 	std::cout << "Grid dims: " << grid_dimensions.x << " " << grid_dimensions.y << std::endl;
 
-	matmul_v1<<<grid_dimensions, block_dimensions >>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+    switch (actv_fn) {
+
+    case ReLU:
+        matmul_v1_ReLU<<<grid_dimensions, block_dimensions >>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+        break;
+    case Sigmoid:
+        matmul_v1_Sigmoid<<<grid_dimensions, block_dimensions >>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+        break;
+    case None:
+        matmul_v1<<<grid_dimensions, block_dimensions >>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+        break;
+    }
 }
 
 __global__
@@ -391,14 +410,19 @@ void GPU::Device::matadd_ver1(float* a, float* b, float* c, size_t a_col, size_t
 	dim3 grid_dimensions(ceilf(c_row / 32.0), ceilf(c_col / 32.0), 1);
 	dim3 block_dimensions(32, 32, 1);
 
-	matadd_v1 << <grid_dimensions, block_dimensions >> > (a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+	matadd_v1<<<grid_dimensions, block_dimensions>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
 }
 
 __global__
 void convolve_v1(const float* k, const float* m, float* o, int kx, int mx, int ox);
+__global__
+void convolve_v1_ReLU(const float* k, const float* m, float* o, int kx, int mx, int ox);
+__global__
+void convolve_v1_Sigmoid(const float* k, const float* m, float* o, int kx, int mx, int ox);
 
 void GPU::Device::conv_ver1(const float* kernel, const float* dat, float* output, 
-        const size_t kernel_dim, const size_t dat_dim, const size_t out_dim) const noexcept {
+        const size_t kernel_dim, const size_t dat_dim, 
+        const size_t out_dim, ActivationFunction actv_fn) const noexcept {
 
     if (!GPU::Device::validate_convolution(kernel_dim, dat_dim, out_dim)) {
         
@@ -409,5 +433,16 @@ void GPU::Device::conv_ver1(const float* kernel, const float* dat, float* output
     dim3 grid_dimensions(ceilf(out_dim / 32.0), ceilf(out_dim / 32.0), 1);
     dim3 block_dimensions(32, 32, 1);
 
-    convolve_v1<<<grid_dimensions, block_dimensions>>>(kernel, dat, output, kernel_dim, dat_dim, out_dim);
+    switch (actv_fn) {
+
+        case ReLU:
+            convolve_v1_ReLU<<<grid_dimensions, block_dimensions>>>(kernel, dat, output, kernel_dim, dat_dim, out_dim);
+            break;
+        case Sigmoid:
+            convolve_v1_Sigmoid<<<grid_dimensions, block_dimensions>>>(kernel, dat, output, kernel_dim, dat_dim, out_dim);
+            break;
+        case None:
+            convolve_v1<<<grid_dimensions, block_dimensions>>>(kernel, dat, output, kernel_dim, dat_dim, out_dim);
+            break;
+    }
 }

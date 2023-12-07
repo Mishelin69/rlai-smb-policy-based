@@ -34,6 +34,9 @@ public:
     Allocator(Allocator& other) = default;
 
     int alloc_new_block(const size_t block_size);
+
+    //return pointer to newly allocated memory if allocated otherwise null
+    //block_size is number of elements you want to allocate
     float* alloc_space(const size_t block_size);
 
 };

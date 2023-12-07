@@ -33,7 +33,7 @@ int main(int argv, char** argc) {
 
     gpu.memcpy_host(mat_dat, cudaMat, sizeof(float) * matrix_size); 
     gpu.memcpy_host(kernel_dat, cudaKernel, sizeof(float) * kernel_size); 
-    gpu.conv_ver1(cudaKernel, cudaMat, cudaOut, kernel_dim, matrix_dim, 2);
+    gpu.conv_ver1(cudaKernel, cudaMat, cudaOut, kernel_dim, matrix_dim, 2, GPU::ActivationFunction::None);
     gpu.device_sync();
     gpu.memcpy_device(cudaOut, out_dat, sizeof(float) * out_size);
 
