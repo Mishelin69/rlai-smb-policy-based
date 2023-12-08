@@ -271,6 +271,8 @@ int GPU::Device::random_numbers(float* p, const size_t n_elems) noexcept {
         return -1;
     }
 
+    //Explanation: (std::nothrow) makes it work like malloc no throwing
+    //I hate when languages throw worst feature, error as value always!!
     float* rnd_mem = new (std::nothrow) float[n_elems];
 
     if (!rnd_mem) {
@@ -443,6 +445,47 @@ void GPU::Device::conv_ver1(const float* kernel, const float* dat, float* output
             break;
         case None:
             convolve_v1<<<grid_dimensions, block_dimensions>>>(kernel, dat, output, kernel_dim, dat_dim, out_dim);
+            break;
+    }
+}
+
+__global__
+void batched_convolve_v2_ReLU(const float* k, const float* m, float* o, 
+        int kx, int mx, int ox, const size_t b_size, const size_t n_elms, const size_t inputs);
+__global__
+void batched_convolve_v2_Sigmoid(const float* k, const float* m, float* o, 
+        int kx, int mx, int ox, const size_t b_size, const size_t n_elms, const size_t inputs);
+
+void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float* output, 
+            const size_t kernel_dim, const size_t dat_dim, const size_t out_dim, ActivationFunction actv_fn, 
+            const size_t n_elms, const size_t batch_size, const size_t inputs) const noexcept {
+
+    if (!GPU::Device::validate_convolution(kernel_dim, dat_dim, out_dim)) {
+        
+        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        return;
+    }
+
+    dim3 grid_dimensions(ceilf(out_dim / 32.0), ceilf((n_elms * out_dim) / 32.0), 1);
+    dim3 block_dimensions(32, 32, 1);
+
+    const size_t cache_size = sizeof(float) * kernel_dim*kernel_dim * n_elms;
+    std::cout << "Batched elm: " << cache_size / sizeof(float) << " byte size: " << cache_size << std::endl;
+
+    switch (actv_fn) {
+
+        case ReLU:
+            batched_convolve_v2_ReLU<<<grid_dimensions, block_dimensions, cache_size>>>(
+                    kernel, dat, output, kernel_dim, dat_dim, out_dim, batch_size, n_elms, inputs
+                    );
+            break;
+        case Sigmoid:
+            batched_convolve_v2_Sigmoid<<<grid_dimensions, block_dimensions, cache_size>>>(
+                    kernel, dat, output, kernel_dim, dat_dim, out_dim, batch_size, n_elms, inputs
+                    );
+            break;
+        [[unlikely]] case None:
+            std::cerr << "GPU::Device::batched_conv_ver1(...) | Option None not supported!!" << std::endl;  
             break;
     }
 }

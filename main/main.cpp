@@ -16,28 +16,41 @@ int main(int argv, char** argc) {
     const size_t out_size = out_dim*out_dim;
 
     const size_t block_size = matrix_size + kernel_size + out_size;
-    int block_res = alloc.alloc_new_block(block_size);
+    int block_res = alloc.alloc_new_block(block_size * 3 - 1);
 
     if (block_res != 0) {
         std::cerr << "allocating memory failed!" << std::endl;
         exit(-1);
     }
 
-    float* cudaMat = alloc.alloc_space(matrix_size);
-    float* cudaKernel = alloc.alloc_space(kernel_size);
-    float* cudaOut = alloc.alloc_space(out_size);
+    float* cudaMat = alloc.alloc_space(matrix_size * 3);
+    float* cudaKernel = alloc.alloc_space(kernel_size * 2);
+    float* cudaOut = alloc.alloc_space(out_size * 3);
 
-    float mat_dat[matrix_size] = {1, 2, 3, 4};
-    float kernel_dat[kernel_size] = {1};
-    float out_dat[4];
+    std::cout << "Out size: " << out_dim << std::endl;
 
-    gpu.memcpy_host(mat_dat, cudaMat, sizeof(float) * matrix_size); 
-    gpu.memcpy_host(kernel_dat, cudaKernel, sizeof(float) * kernel_size); 
-    gpu.conv_ver1(cudaKernel, cudaMat, cudaOut, kernel_dim, matrix_dim, 2, GPU::ActivationFunction::None);
+    float mat_dat[matrix_size * 3] = {
+        1, 2, 
+        3, 4, 
+        5, 6, 
+        7, 8, 
+        9, 10, 
+        11, 12
+    };
+
+    float kernel_dat[kernel_size * 2] = {1, 1};
+    float out_dat[12];
+
+    gpu.memcpy_host(mat_dat, cudaMat, sizeof(float) * matrix_size * 3); 
+    gpu.memcpy_host(kernel_dat, cudaKernel, sizeof(float) * kernel_size * 2); 
+
+    gpu.batched_conv_ver1(cudaKernel, cudaMat, cudaOut, kernel_dim, matrix_dim, 2, 
+            GPU::ActivationFunction::ReLU, 2, 4, 3);
+
     gpu.device_sync();
-    gpu.memcpy_device(cudaOut, out_dat, sizeof(float) * out_size);
+    gpu.memcpy_device(cudaOut, out_dat, sizeof(float) * out_size * 3);
 
-    for (int i = 0; i < out_size; ++i) {
+    for (int i = 0; i < out_size * 3; ++i) {
         std::cout << "Elm " << i << ". => " << out_dat[i] << std::endl;
     }
 

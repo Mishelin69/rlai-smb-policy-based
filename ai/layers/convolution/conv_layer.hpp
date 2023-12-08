@@ -30,6 +30,7 @@ public:
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
             const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref);
 
+    //no need for anything special since memory is on the gpu
     ~ConvolutionalLayer() = default;
 
     ConvolutionalLayer(ConvolutionalLayer& other) = delete;
@@ -39,7 +40,7 @@ public:
             const uint32_t input_x, const uint32_t input_y, const uint32_t kernel_shift
         ) noexcept;
 
-    void convolve(float* a, float* out, const uint32_t a_x,
-            const uint32_t a_y, const uint32_t offset) const noexcept;
+    void convolve(float* a, float* out, 
+            const uint32_t a_x, const uint32_t a_y) const noexcept;
 
 };

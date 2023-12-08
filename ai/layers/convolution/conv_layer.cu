@@ -44,8 +44,8 @@ ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction
     }
 }
 
-void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
-        const uint32_t a_y, const uint32_t offset) const noexcept {
+void ConvolutionalLayer::convolve(float* a, float* out, 
+        const uint32_t a_x, const uint32_t a_y) const noexcept {
 
     const std::pair<uint32_t, uint32_t> out_dims = ConvolutionalLayer::calc_output_size(
             this->kernel_x, this->kernel_y, a_x, a_y, this->kernel_shift
@@ -61,11 +61,11 @@ void ConvolutionalLayer::convolve(float* a, float* out, const uint32_t a_x,
     //remove the con-ref bs everywhere!!
     for (size_t i = 0; i < this->feature_maps; ++i) {
         for(size_t j = 0; j < this->maps_before; ++j) {
-            gpu.conv_ver1( 
-                    cuda_kernel + (i * (sizeof(float) * kernel_x * kernel_y)), 
+            gpu.batched_conv_ver1( 
+                    cuda_kernel + (i * kernel_x * kernel_y), 
                     a + j * a_x  * a_y,
-                    out + i*dim_x*dim_y + offset,
-                    this->kernel_x, a_x, dim_x, actv_func);
+                    out + i*dim_x*dim_y,
+                    this->kernel_x, a_x, dim_x, actv_func, feat);
         }
     }
 

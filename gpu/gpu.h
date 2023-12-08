@@ -195,6 +195,9 @@ public:
             const size_t kernel_dim, const size_t dat_dim, 
             const size_t out_dim, ActivationFunction actv_fn) const noexcept;
 
+    void batched_conv_ver1(const float* kernel, const float* dat, float* output, 
+            const size_t kernel_dim, const size_t dat_dim, const size_t out_dim, ActivationFunction actv_fn, 
+            const size_t n_elms, const size_t batch_size, const size_t inputs) const noexcept;
 };
 
 }

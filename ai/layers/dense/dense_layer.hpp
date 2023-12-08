@@ -22,7 +22,11 @@ private:
 public:
 
     DenseLayer(GPU::Device& gpu, Allocator& alloc,
-            size_t neurons, size_t input, GPU::ActivationFunction actv_func);
+            const size_t neurons, const size_t input, const GPU::ActivationFunction actv_func);
     DenseLayer(DenseLayer& other) = default;
-    ~DenseLayer();
+
+    //actually no problem since memory is on the gpu
+    ~DenseLayer() = default;
+
+    void passthrough(const float* a, float* out) const noexcept;
 };
