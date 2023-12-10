@@ -61,11 +61,14 @@ void ConvolutionalLayer::convolve(float* a, float* out,
     //remove the con-ref bs everywhere!!
     for (size_t i = 0; i < this->feature_maps; ++i) {
         for(size_t j = 0; j < this->maps_before; ++j) {
+            /*
             gpu.batched_conv_ver1( 
                     cuda_kernel + (i * kernel_x * kernel_y), 
                     a + j * a_x  * a_y,
                     out + i*dim_x*dim_y,
-                    this->kernel_x, a_x, dim_x, actv_func, feat);
+                    this->kernel_x, a_x, dim_x, 
+                    actv_func, );
+                    */
         }
     }
 

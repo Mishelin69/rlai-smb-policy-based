@@ -198,7 +198,6 @@ void batched_convolve_v2_ReLU(const float* k, const float* m, float* o,
     //then wait for this to be loaded and in sync 
     //to make sure that the kernel is properly loaded in
     if (x < kx && y < kx*n_elms) {
-        printf("KERNEL HIT \n");
         sharedKernel[y*kx + x] = k[y*kx + x];
     }
     __syncthreads();
@@ -207,7 +206,9 @@ void batched_convolve_v2_ReLU(const float* k, const float* m, float* o,
     if (x < ox && y < ox * n_elms) {
 
         //Index of the element inside batch
-        const size_t nth_elm = (y*ox + x) / b_size;
+        //(y*ox + x) / (ox*ox) => (y) / (ox) since ox cancels out, ignore x since integer 
+        //division rounds towards zero anyways
+        const size_t nth_elm = (y*ox) / (ox*ox);
         float sum = 0;
 
         for (size_t rows = 0; rows < kx; ++rows) {
@@ -215,7 +216,7 @@ void batched_convolve_v2_ReLU(const float* k, const float* m, float* o,
                 for (size_t i = 0; i < inputs; ++i) {
 
                     const size_t kernel_index = nth_elm*kx*kx + kx*rows + cols;
-                    const size_t mat_index = i*b_size + y*mx + rows*mx + cols + x;
+                    const size_t mat_index = i*b_size + (y - nth_elm * ox)*mx + rows*mx + cols + x;
 
                     sum += sharedKernel[kernel_index] * m[mat_index];
                 }
@@ -250,7 +251,9 @@ void batched_convolve_v2_Sigmoid(const float* k, const float* m, float* o,
     if (x < ox && y < ox * n_elms) {
 
         //Index of the element inside batch
-        const size_t nth_elm = (y*ox + x) / b_size;
+        //(y*ox + x) / (ox*ox) => (y) / (ox) since ox cancels out, ignore x since integer 
+        //division rounds towards zero anyways
+        const size_t nth_elm = (y*ox) / (ox*ox);
         float sum = 0;
 
         for (size_t rows = 0; rows < kx; ++rows) {
@@ -258,7 +261,7 @@ void batched_convolve_v2_Sigmoid(const float* k, const float* m, float* o,
                 for (size_t i = 0; i < inputs; ++i) {
 
                     const size_t kernel_index = nth_elm*kx*kx + kx*rows + cols;
-                    const size_t mat_index = i*b_size + y*mx + rows*mx + cols + x;
+                    const size_t mat_index = i*b_size + (y - nth_elm * ox)*mx + rows*mx + cols + x;
 
                     sum += sharedKernel[kernel_index] * m[mat_index];
                 }
