@@ -1,5 +1,6 @@
 #include "./conv_layer.hpp"
 #include "../../allocator/allocator.hpp"
+#include <cuda_runtime_api.h>
 #include <iostream>
 
 std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
@@ -17,9 +18,9 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
 ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction actv_func,
             const uint32_t maps_before, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
-            const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref)
+            const uint32_t kernel_shift, Allocator& alloc, cudaStream_t stream)
     : gpu(gpu), maps_before(maps_before), feature_maps(feature_maps), actv_func(actv_func),
-      kernel_x(kernel_dim), kernel_y(kernel_dim), kernel_shift(kernel_shift) {
+      kernel_x(kernel_dim), kernel_y(kernel_dim), kernel_shift(kernel_shift), stream(stream) {
 
     //calculate the amount of memory needed (in bytes) to keep the stuff in
     const uint32_t kernel_size_bytes = sizeof(float) * kernel_dim * kernel_dim;
@@ -54,25 +55,26 @@ void ConvolutionalLayer::convolve(float* a, float* out,
     const uint32_t dim_x = out_dims.first;
     const uint32_t dim_y = out_dims.second;
 
+    //ik using this is stupid but I like it, it makes things more explicit
+    //this makes convolution go in one go, calling them separately would make them
+    //either wait or use multiple stream, assuming I want to process multiple pieces
+    //of data at once (batch) this would most definitely max out if not go past
+    //the stream limit (a necessity in this case)
+    gpu.batched_conv_ver1( 
+            this->cuda_kernel,
+            a,
+            out, 
+            this->kernel_x,
+            a_x,
+            dim_x,
+            this->actv_func,
+            this->feature_maps,
+            a_x * a_y,
+            this->maps_before,
+            this->stream
+        );
 
-    //finish this
-    //NOTE for tmrw or whenever => ! all of the filters connect 
-    //densely to all of the inputs
-    //remove the con-ref bs everywhere!!
-    for (size_t i = 0; i < this->feature_maps; ++i) {
-        for(size_t j = 0; j < this->maps_before; ++j) {
-            /*
-            gpu.batched_conv_ver1( 
-                    cuda_kernel + (i * kernel_x * kernel_y), 
-                    a + j * a_x  * a_y,
-                    out + i*dim_x*dim_y,
-                    this->kernel_x, a_x, dim_x, 
-                    actv_func, );
-                    */
-        }
-    }
-
-    //wait for the GPU to finish it's job
+    //wait for the GPU to finish it's job (stream)
     //keep the data on the GPU tho
-    gpu.device_sync();
+    cudaStreamSynchronize(this->stream);
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "../../../gpu/gpu.h"
+#include "driver_types.h"
 
 class Allocator;
 
@@ -22,13 +23,14 @@ private:
 
     GPU::Device& gpu;
     GPU::ActivationFunction actv_func;
+    cudaStream_t stream;
 
 public:
 
     ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction func,
             const uint32_t maps_before, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
-            const uint32_t kernel_shift, Allocator& alloc, const uint32_t* con_ref);
+            const uint32_t kernel_shift, Allocator& alloc, cudaStream_t stream);
 
     //no need for anything special since memory is on the gpu
     ~ConvolutionalLayer() = default;

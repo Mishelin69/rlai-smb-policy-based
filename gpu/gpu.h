@@ -1,5 +1,6 @@
 #pragma once
 
+#include "driver_types.h"
 #include <cstdint>
 #include <vector>
 
@@ -184,20 +185,23 @@ public:
             size_t c_col, size_t c_row) const noexcept;
 
 	void matmul_ver1_gpu(float* a, float* b, float* c, size_t a_col, 
-            size_t a_row, size_t b_col, size_t b_row, 
-            size_t c_col, size_t c_row, ActivationFunction actv_fn) const noexcept;
+            size_t a_row, size_t b_col, size_t b_row, size_t c_col, 
+            size_t c_row, ActivationFunction actv_fn, const cudaStream_t stream) const noexcept;
 
 	void matadd_ver1(float* a, float* b, float* c, size_t a_col, 
             size_t a_row, size_t b_col, size_t b_row, 
-            size_t c_col, size_t c_row) const noexcept;
+            size_t c_col, size_t c_row, const cudaStream_t stream) const noexcept;
 
     void conv_ver1(const float* kernel, const float* dat, float* output, 
             const size_t kernel_dim, const size_t dat_dim, 
             const size_t out_dim, ActivationFunction actv_fn) const noexcept;
 
+    //By default use stream 0, otherwise make sure the stream is properly created!
     void batched_conv_ver1(const float* kernel, const float* dat, float* output, 
             const size_t kernel_dim, const size_t dat_dim, const size_t out_dim, ActivationFunction actv_fn, 
-            const size_t n_elms, const size_t batch_size, const size_t inputs) const noexcept;
+            const size_t n_elms, const size_t batch_size, const size_t inputs, const cudaStream_t stream) const noexcept; 
+
+    
 };
 
 }

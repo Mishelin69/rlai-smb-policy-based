@@ -1,5 +1,6 @@
 #pragma once
 #include "../../../gpu/gpu.h"
+#include "driver_types.h"
 
 class Allocator;
 
@@ -18,15 +19,16 @@ private:
 
     GPU::Device& gpu;
     GPU::ActivationFunction actv_func;
+    cudaStream_t stream;
 
 public:
 
-    DenseLayer(GPU::Device& gpu, Allocator& alloc,
-            const size_t neurons, const size_t input, const GPU::ActivationFunction actv_func);
+    DenseLayer(GPU::Device& gpu, Allocator& alloc, const size_t neurons, 
+            const size_t input, const GPU::ActivationFunction actv_func, const cudaStream_t stream);
     DenseLayer(DenseLayer& other) = default;
 
     //actually no problem since memory is on the gpu
     ~DenseLayer() = default;
 
-    void passthrough(const float* a, float* out) const noexcept;
+    void passthrough(float* a, float* out) const noexcept;
 };
