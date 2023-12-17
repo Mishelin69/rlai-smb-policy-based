@@ -48,7 +48,7 @@ int main(int argv, char** argc) {
     gpu.memcpy_host(kernel_dat, cudaKernel, sizeof(float) * kernel_size * 3); 
 
     gpu.batched_conv_ver1(cudaKernel, cudaMat, cudaOut, kernel_dim, matrix_dim, 2, 
-            GPU::ActivationFunction::ReLU, 3, 4, 3);
+            GPU::ActivationFunction::ReLU, 3, 4, 3, 0);
 
     gpu.device_sync();
     gpu.memcpy_device(cudaOut, out_dat, sizeof(float) * out_size * 3);

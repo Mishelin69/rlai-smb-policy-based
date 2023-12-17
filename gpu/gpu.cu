@@ -489,3 +489,11 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
             break;
     }
 }
+
+void GPU::Device::batched_max_pool_ver1(const Tensor input, 
+        Tensor out, const size_t pool_size, const cudaStream_t stream) const noexcept {
+
+    const size_t threads_per_img = out.dat_x*out.dat_y;
+    const size_t threads_x = 32; //this is enforced so we make use of warps
+    
+}

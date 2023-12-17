@@ -14,6 +14,7 @@ struct AllocatorBlock {
     size_t block_size;
     size_t block_id;
     size_t block_free;
+    size_t padding;
 
 };
 
@@ -27,16 +28,18 @@ private:
     std::vector<AllocatorBlock> blocks;
     std::vector<AllocatorEntry> entries;
 
+    const size_t alignment;
+
 public:
 
-    Allocator(GPU::Device& gpu);
+    Allocator(GPU::Device& gpu, const size_t align);
     ~Allocator();
     Allocator(Allocator& other) = default;
 
-    int alloc_new_block(const size_t block_size);
+    int alloc_new_block(const size_t bytes);
 
     //return pointer to newly allocated memory if allocated otherwise null
     //block_size is number of elements you want to allocate
-    float* alloc_space(const size_t block_size);
+    float* alloc_space(const size_t n_elems);
 
 };

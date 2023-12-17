@@ -1,10 +1,11 @@
 #include "./allocator.hpp"
+#include <cmath>
 #include <iostream>
 
-Allocator::Allocator(GPU::Device& gpu):
-    entry_n(0), blocks(std::vector<AllocatorBlock>()), entries(std::vector<AllocatorEntry>()), gpu(gpu) {
-
-    }
+//ugly ass code :( but it works! <3
+Allocator::Allocator(GPU::Device& gpu, const size_t align):
+    entry_n(0), blocks(std::vector<AllocatorBlock>()), entries(std::vector<AllocatorEntry>()), 
+    gpu(gpu), alignment(align) { }
 
 Allocator::~Allocator() {
 
@@ -26,37 +27,57 @@ Allocator::~Allocator() {
 
 }
 
-int Allocator::alloc_new_block(const size_t block_size) {
+int Allocator::alloc_new_block(const size_t bytes) {
 
-    float* cuda_p = this->gpu.allocate_memory(sizeof(float) * block_size);
+    //make sure the block size is divisible by align and if not then make it mathch that size
+    size_t mem_to_alloc = bytes;
+    size_t extra = 0;
+
+    if (mem_to_alloc % alignment != 0) {
+        const size_t upper = (size_t) std::ceil(mem_to_alloc / alignment);
+        mem_to_alloc = sizeof(float) * upper;
+        extra = mem_to_alloc - bytes;
+    }
+
+    float* cuda_p = this->gpu.allocate_memory(mem_to_alloc);
 
     if (!cuda_p) {
         std::cerr << "Couln't allocate memory on the gpu!" << std::endl;
         return -1;
     }
 
-    this->blocks.push_back( AllocatorBlock { cuda_p, block_size, blocks.size(), block_size } );
+    this->blocks.push_back( AllocatorBlock { cuda_p, bytes, blocks.size(), bytes, extra } );
 
     return 0;
 }
 
-float* Allocator::alloc_space(const size_t block_size) {
+float* Allocator::alloc_space(const size_t bytes) {
 
-    size_t blck_id = 0;
+    //basically make sure the memory is aligned correctly
+    size_t block_id = 0;
+    size_t mem_to_alloc = bytes;
+    size_t extra = 0;
 
-    for (auto& b : this->blocks) {
+    if (mem_to_alloc % alignment != 0) {
+        const size_t upper = (size_t) std::ceil(mem_to_alloc / alignment);
+        mem_to_alloc = sizeof(float) * upper;
+        extra = mem_to_alloc - bytes;
+    }
 
-        if (b.block_free >= block_size) {
+    for (auto& b : blocks) {
 
-            b.block_free -= block_size;
-            float* cuda_p = b.block_root + b.block_free;
+        if (b.block_free < mem_to_alloc) {
 
-            this->entries.push_back( AllocatorEntry { cuda_p, block_size, blck_id });
-
-            return cuda_p;
+            block_id += 1;
+            continue;
         }
 
-        blck_id += 1;
+        b.block_free -= mem_to_alloc;
+        float* cuda_p = b.block_root + b.block_free;
+
+        this->entries.push_back(AllocatorEntry {cuda_p, mem_to_alloc, block_id} );
+
+        return cuda_p;
     }
 
     return NULL;
