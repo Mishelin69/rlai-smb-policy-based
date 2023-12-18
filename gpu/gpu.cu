@@ -484,6 +484,8 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
                     kernel, dat, output, kernel_dim, dat_dim, out_dim, batch_size, n_elms, inputs
                     );
             break;
+        //compiler ignores this idk why this there (no c++20 flag but I'm too lazy to put it there
+        //I mean, would it really matter that much if it gets ignored? I don't think so :| )
         [[unlikely]] case None:
             std::cerr << "GPU::Device::batched_conv_ver1(...) | Option None not supported!!" << std::endl;  
             break;
@@ -493,7 +495,7 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
 void GPU::Device::batched_max_pool_ver1(const Tensor input, 
         Tensor out, const size_t pool_size, const cudaStream_t stream) const noexcept {
 
-    const size_t threads_per_img = out.dat_x*out.dat_y;
-    const size_t threads_x = 32; //this is enforced so we make use of warps
-    
+    dim3 grid_dimensions(ceilf(out.dat_x / 32.0), ceilf((out.dat_z * out.dat_y) / 32.0), 1);
+    dim3 block_dimensions(32, 32, 1);
+
 }
