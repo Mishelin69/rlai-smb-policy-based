@@ -31,4 +31,7 @@ public:
     ~DenseLayer() = default;
 
     void passthrough(float* a, float* out) const noexcept;
+
+    void gradient_calculation(const GPU::Tensor activations, const GPU::Tensor gradient,
+            GPU::Tensor out);
 };

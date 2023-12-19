@@ -1,5 +1,7 @@
 #pragma once
 
+namespace GPU {
+
 struct Tensor {
 
     float* dat_pointer;
@@ -8,3 +10,5 @@ struct Tensor {
     size_t dat_z;
         
 };
+
+}

@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "../ai/tensor/tensor.h"
+#include "tensor/tensor.h"
 
 namespace GPU {
 
@@ -204,7 +204,7 @@ public:
             const size_t n_elms, const size_t batch_size, const size_t inputs, const cudaStream_t stream) const noexcept; 
 
     //This is where I actually started using brain instead of being dumb :)
-    void batched_max_pool_ver1(const Tensor input, Tensor out, 
+    void batched_max_pool_ver1(const Tensor input, Tensor out, size_t* idx_ptr, 
             const size_t pool_size, const cudaStream_t stream) const noexcept;
     
 };

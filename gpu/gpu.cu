@@ -491,11 +491,24 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
             break;
     }
 }
+__global__
+void max_pooling_ver1(const float* a, float* out, size_t* out_idx, const size_t pool_size,
+        const size_t input_dim, const size_t output_dim, const size_t z_dim);
 
-void GPU::Device::batched_max_pool_ver1(const Tensor input, 
-        Tensor out, const size_t pool_size, const cudaStream_t stream) const noexcept {
+void GPU::Device::batched_max_pool_ver1(const Tensor input, Tensor out, size_t* idx_ptr,
+        const size_t pool_size, const cudaStream_t stream) const noexcept {
 
     dim3 grid_dimensions(ceilf(out.dat_x / 32.0), ceilf((out.dat_z * out.dat_y) / 32.0), 1);
     dim3 block_dimensions(32, 32, 1);
+
+    max_pooling_ver1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            input.dat_pointer, 
+            out.dat_pointer, 
+            idx_ptr, 
+            pool_size, 
+            input.dat_x, 
+            out.dat_x, 
+            input.dat_z
+            );
 
 }
