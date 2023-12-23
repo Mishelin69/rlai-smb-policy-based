@@ -4,43 +4,43 @@
 #include <iostream>
 
 DenseLayer::DenseLayer(GPU::Device& gpu, Allocator& alloc, const size_t neurons, 
-        const size_t input, const GPU::ActivationFunction actv_func, const cudaStream_t stream)
-    : gpu(gpu), input_shape(input), neurons(neurons), stream(stream) {
+        const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func)
+    : gpu(gpu), input_shape(input), neurons(neurons), actv_func(actv_func), der_actv_func(der_actv_func) {
 
-    this->mat_y = neurons;
-    this->mat_x = input;
-    this->biases = neurons;
+        this->mat_y = neurons;
+        this->mat_x = input;
+        this->biases = neurons;
 
-    float* cudaMat = alloc.alloc_space(mat_y * mat_x);
+        float* cudaMat = alloc.alloc_space(mat_y * mat_x);
 
-    if (!cudaMat) {
-        std::cerr << "DenseLayer::DenseLayer() | Error: Couldn't allocate memory for neurons!!" << std::endl;
-        exit(-1);
+        if (!cudaMat) {
+            std::cerr << "DenseLayer::DenseLayer() | Error: Couldn't allocate memory for neurons!!" << std::endl;
+            exit(-1);
+        }
+
+        int res = gpu.random_numbers(cudaMat, mat_y * mat_x);
+
+        //!!res would be crazy but correct :D since only 0 evals as false (talking numbers ofc)
+        //(negative numbers eval to true since they hold some value :| )
+        if (res != 0) {
+            std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing neurons!!" << std::endl; 
+        }
+
+        float* cudaBias = alloc.alloc_space(biases);
+
+        if (!cudaBias) {
+            std::cerr << "DenseLayer::DenseLayer() | Error: Couldn't allocate memory for biases!!" << std::endl;
+            exit(-1);
+        }
+
+        res = gpu.random_numbers(cudaBias, biases);
+
+        if (res != 0) {
+            std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing biases!!" << std::endl; 
+        }
     }
 
-    int res = gpu.random_numbers(cudaMat, mat_y * mat_x);
-
-    //!!res would be crazy but correct :D since only 0 evals as false (talking numbers ofc)
-    //(negative numbers eval to true since they hold some value :| )
-    if (res != 0) {
-        std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing neurons!!" << std::endl; 
-    }
-
-    float* cudaBias = alloc.alloc_space(biases);
-
-    if (!cudaBias) {
-        std::cerr << "DenseLayer::DenseLayer() | Error: Couldn't allocate memory for biases!!" << std::endl;
-        exit(-1);
-    }
-
-    res = gpu.random_numbers(cudaBias, biases);
-
-    if (res != 0) {
-        std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing biases!!" << std::endl; 
-    }
-}
-
-void DenseLayer::passthrough(float* a, float* out) const noexcept {
+void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) const noexcept {
 
     std::pair<size_t, size_t> out_shape = GPU::Device::calculate_new_mat_dims(mat_x, mat_y, input_shape, input_shape); 
 
@@ -59,7 +59,7 @@ void DenseLayer::passthrough(float* a, float* out) const noexcept {
             out_x,
             this->actv_func,
             this->stream
-    );
+            );
 
     gpu.matadd_ver1(
             this->cudaBias,
@@ -72,7 +72,27 @@ void DenseLayer::passthrough(float* a, float* out) const noexcept {
             out_y, //this should match but worst scenario I get an error :chomik_xmas:
             1,
             this->stream
-    );
+            );
 
     cudaStreamSynchronize(stream);
+}
+
+void DenseLayer::gradient_calculation(const GPU::Tensor w_layer_before, const GPU::Tensor activations, 
+        const GPU::Tensor gradient, GPU::Tensor out, const cudaStream_t stream) const noexcept {
+
+    gpu.matmul_ver1_gpu(
+            gradient.dat_pointer, 
+            cudaMat, 
+            out.dat_pointer, 
+            gradient.dat_x, 
+            1, 
+            1, 
+            mat_y, 
+            out.dat_x, 
+            out.dat_y, 
+            GPU::ActivationFunction::None, 
+            stream
+            );
+
+    gpu.matmul_elementwise(out, activations, out, stream, der_actv_func);
 }

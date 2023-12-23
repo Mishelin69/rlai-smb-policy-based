@@ -5,7 +5,7 @@
 int main(int argv, char** argc) {
 
     GPU::Device gpu;
-    Allocator alloc(gpu);
+    Allocator alloc(gpu, 32);
 
     const size_t matrix_dim = 2;
     const size_t matrix_size = matrix_dim * matrix_dim;

@@ -11,7 +11,9 @@ namespace GPU {
 enum ActivationFunction {
     ReLU = 0,
     Sigmoid,
-    None
+    None, 
+    DerReLU,
+    DerSigmoid
 };
 
 struct DeviceMemoryEntry {
@@ -206,7 +208,10 @@ public:
     //This is where I actually started using brain instead of being dumb :)
     void batched_max_pool_ver1(const Tensor input, Tensor out, size_t* idx_ptr, 
             const size_t pool_size, const cudaStream_t stream) const noexcept;
-    
+
+    void matmul_elementwise(Tensor a, Tensor b, Tensor out, 
+            const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept;
+
 };
 
 }

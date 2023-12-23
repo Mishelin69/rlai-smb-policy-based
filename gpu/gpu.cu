@@ -366,6 +366,12 @@ __global__
 void matmul_v1_Sigmoid(float* A, float* B, float* C, 
 	size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
 
+__global__
+void matmul_v1_DerReLU(float* A, float* B, float* C, 
+    size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
+__global__
+void matmul_v1_DerSigmoid(float* A, float* B, float* C, 
+    size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
 
 void GPU::Device::matmul_ver1_gpu(float* a, float* b, float* c,
 	size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, 
@@ -392,27 +398,33 @@ void GPU::Device::matmul_ver1_gpu(float* a, float* b, float* c,
     case None:
         matmul_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
         break;
+    case DerReLU:
+        matmul_v1_DerReLU<<<grid_dimensions, block_dimensions, 0, stream>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+        break;
+    case DerSigmoid:
+        matmul_v1_DerSigmoid<<<grid_dimensions, block_dimensions, 0, stream>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+        break;
     }
 }
 
 __global__
 void matadd_v1(float* A, float* B, float* C,
-	size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
+        size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
 
 void GPU::Device::matadd_ver1(float* a, float* b, float* c, size_t a_col, size_t a_row, 
-	size_t b_col, size_t b_row, size_t c_col, size_t c_row, const cudaStream_t stream) const noexcept {
+        size_t b_col, size_t b_row, size_t c_col, size_t c_row, const cudaStream_t stream) const noexcept {
 
-	if (!GPU::Device::validate_matadd(a_col, a_row, b_col, b_row) 
-		|| !GPU::Device::validate_matadd(a_col, a_row, c_col, c_row)) {
+    if (!GPU::Device::validate_matadd(a_col, a_row, b_col, b_row) 
+            || !GPU::Device::validate_matadd(a_col, a_row, c_col, c_row)) {
 
-		std::cerr << "Error: matadd invalid matrix dimensions!" << std::endl;
-		return;
-	}
+        std::cerr << "Error: matadd invalid matrix dimensions!" << std::endl;
+        return;
+    }
 
-	dim3 grid_dimensions(ceilf(c_row / 32.0), ceilf(c_col / 32.0), 1);
-	dim3 block_dimensions(32, 32, 1);
+    dim3 grid_dimensions(ceilf(c_row / 32.0), ceilf(c_col / 32.0), 1);
+    dim3 block_dimensions(32, 32, 1);
 
-	matadd_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
+    matadd_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
 }
 
 __global__
@@ -427,7 +439,7 @@ void GPU::Device::conv_ver1(const float* kernel, const float* dat, float* output
         const size_t out_dim, ActivationFunction actv_fn) const noexcept {
 
     if (!GPU::Device::validate_convolution(kernel_dim, dat_dim, out_dim)) {
-        
+
         std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
         return;
     }
@@ -457,11 +469,11 @@ void batched_convolve_v2_Sigmoid(const float* k, const float* m, float* o,
         int kx, int mx, int ox, const size_t b_size, const size_t n_elms, const size_t inputs);
 
 void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float* output, 
-            const size_t kernel_dim, const size_t dat_dim, const size_t out_dim, ActivationFunction actv_fn, 
-            const size_t n_elms, const size_t batch_size, const size_t inputs, const cudaStream_t stream) const noexcept {
+        const size_t kernel_dim, const size_t dat_dim, const size_t out_dim, ActivationFunction actv_fn, 
+        const size_t n_elms, const size_t batch_size, const size_t inputs, const cudaStream_t stream) const noexcept {
 
     if (!GPU::Device::validate_convolution(kernel_dim, dat_dim, out_dim)) {
-        
+
         std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
         return;
     }
@@ -484,10 +496,10 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
                     kernel, dat, output, kernel_dim, dat_dim, out_dim, batch_size, n_elms, inputs
                     );
             break;
-        //compiler ignores this idk why this there (no c++20 flag but I'm too lazy to put it there
-        //I mean, would it really matter that much if it gets ignored? I don't think so :| )
-        [[unlikely]] case None:
-            std::cerr << "GPU::Device::batched_conv_ver1(...) | Option None not supported!!" << std::endl;  
+            //compiler ignores this idk why this there (no c++20 flag but I'm too lazy to put it there
+            //I mean, would it really matter that much if it gets ignored? I don't think so :| )
+            [[unlikely]] case None:
+                std::cerr << "GPU::Device::batched_conv_ver1(...) | Option None not supported!!" << std::endl;  
             break;
     }
 }
@@ -510,5 +522,42 @@ void GPU::Device::batched_max_pool_ver1(const Tensor input, Tensor out, size_t* 
             out.dat_x, 
             input.dat_z
             );
+
+}
+
+__global__
+void matmul_elementwise_DerReLU(float* a, float *b, float* c, const size_t x_max, const size_t y_max);
+
+__global__
+void matmul_elementwise_DerSigmoid(float* a, float *b, float* c, const size_t x_max, const size_t y_max);
+
+void GPU::Device::matmul_elementwise(Tensor a, Tensor b, Tensor out, 
+        const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept {
+    
+    if (out.dat_x % 32 != 0) {
+
+        std::cerr << "GPU::Device::matmul_elementwise | Dims not a multiple of 32!!!" << std::endl;
+        return;
+    }
+
+    dim3 grid_dimensions(ceilf(out.dat_y / 32.0), ceilf(out.dat_x / 32.0), 1);
+    dim3 block_dimensions(32, 32, 1);
+
+    switch (actv_fn) {
+        
+        case DerReLU:
+            matmul_elementwise_DerReLU<<<grid_dimensions, block_dimensions, 0, stream>>>(a.dat_pointer, b.dat_pointer, out.dat_pointer, out.dat_x, out.dat_y);
+            break;
+        case DerSigmoid:
+            matmul_elementwise_DerSigmoid<<<grid_dimensions, block_dimensions, 0, stream>>>(a.dat_pointer, b.dat_pointer, out.dat_pointer, out.dat_x, out.dat_y);
+            break;
+
+        case None:
+        case ReLU:
+        case Sigmoid:
+        default:
+            std::cerr << "GPU::Device::matmul_elementwise | Invalid enum option" << std::endl;
+            return;    
+    }
 
 }
