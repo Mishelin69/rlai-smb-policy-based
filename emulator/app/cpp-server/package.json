@@ -1,0 +1,21 @@
+{
+  "name": "cpp-server",
+  "version": "1.0.0",
+  "description": "First time linking cpp with js ",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node-gyp rebuild",
+    "clean": "node-gyp clean"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "node-gyp": "^10.0.1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-addon-api": "^7.0.0"
+  },
+  "gypfile": true
+}

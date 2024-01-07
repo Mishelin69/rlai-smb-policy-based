@@ -70,22 +70,22 @@ def is_equal(a: NDArray, a_xoff: int, a_yoff: int, b: NDArray) -> bool:
     #NOTE: This when uncommented can be used to get tiles that are not of the same colour 
     #      Good when you want to save tiles so they match over here
     #
-    #arr = []
+    # arr = []
 
-    #for i in range(16):
-        #for j in range(16):
+    # for i in range(16):
+    #     for j in range(16):
 
-            #arr.append(a[a_yoff*16 + i][a_xoff*16 + j])
+    #         arr.append(a[a_yoff*16 + i][a_xoff*16 + j])
 
-    #if len(set(arr)) == 1:
-        #return False
+    # if len(set(arr)) == 1:
+    #     return False
 
 
-    #_arr = np.reshape(np.array(arr), (16, 16))
-    #Image.fromarray(_arr).show()
-    #Image.fromarray(_arr).save("./sprite/brick2.png")
+    # _arr = np.reshape(np.array(arr), (16, 16))
+    # Image.fromarray(_arr).show()
+    # Image.fromarray(_arr).save("./sprite/brick2.png")
 
-    #input()
+    # input()
 
     for i in range(16):
         for j in range(16):

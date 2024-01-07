@@ -8,6 +8,9 @@
 
 namespace GPU {
 
+float* align_mem(float* ptr, const uint32_t bytes, const uint32_t align);
+size_t mem_needed_align(const uint32_t bytes, const uint32_t align);
+
 enum ActivationFunction {
     ReLU = 0,
     Sigmoid,

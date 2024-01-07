@@ -34,3 +34,6 @@
 #clangd config file
 *.clangd
 **/*.clangd
+
+#stupid big file
+emulator/app/react-nes/
