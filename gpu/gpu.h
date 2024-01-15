@@ -208,6 +208,8 @@ public:
             const size_t kernel_dim, const size_t dat_dim, const size_t out_dim, ActivationFunction actv_fn, 
             const size_t n_elms, const size_t batch_size, const size_t inputs, const cudaStream_t stream) const noexcept; 
 
+    void layer_convolution(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream);
+
     //This is where I actually started using brain instead of being dumb :)
     void batched_max_pool_ver1(const Tensor input, Tensor out, size_t* idx_ptr, 
             const size_t pool_size, const cudaStream_t stream) const noexcept;

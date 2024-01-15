@@ -1,4 +1,7 @@
 #include "./network.hpp"
+#include "cuda_runtime_api.h"
+#include "driver_types.h"
+#include <iostream>
 
 uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
     const uint32_t n_enemies, const uint32_t timer,
@@ -60,12 +63,21 @@ RLAgent::RLAgent():
     critic_layers(2), critic_in(128), critic_out(1), 
     conv_layers(5), conv_in(MAP_SIZE), conv_out(64) {
 
+    for (size_t i = 0; i < BATCH_SIZE; ++i) {
+
+        auto ret = cudaStreamCreate(&(this->streams[i]));
+
+        if (ret != cudaSuccess) {
+            std::cerr << "RLAgent::RLAgent() | Couldn't allocate a cuda stream!" << std::endl;
+        }
+    }
+
     this->weights_total = 
         //conv network first, and its layers
-        GPU::mem_needed_align(sizeof(float) * 16 * 3 * 3, sizeof(float) * 4) + 
-        GPU::mem_needed_align(sizeof(float) * 32 * 4 * 4, sizeof(float) * 4) + 
+        GPU::mem_needed_align(sizeof(float) * 16 * 3 * 3 * 1, sizeof(float) * 4) + 
+        GPU::mem_needed_align(sizeof(float) * 32 * 4 * 4 * 16, sizeof(float) * 4) + 
         //skip max pooling since nothing learnable there
-        GPU::mem_needed_align(sizeof(float) * 32 * 3 * 3, sizeof(float) * 4) + 
+        GPU::mem_needed_align(sizeof(float) * 32 * 3 * 3 * 32, sizeof(float) * 4) + 
         GPU::mem_needed_align(sizeof(float) * 128 * 64, sizeof(float) * 4) + 
         //critic network
         GPU::mem_needed_align(sizeof(float) * 64 * 64, sizeof(float) * 4) + 
@@ -88,13 +100,18 @@ RLAgent::RLAgent():
     this->current_frame = 0;
     this->current_reward = 0;
 
-    this->actor_gradient_size = 
-        GPU::mem_needed_align(sizeof(float) * 
-            (, sizeof(float) * 4);
+    this->actor_gradient_size = GPU::mem_needed_align(
+            sizeof(float) * (64*64 + 64*3), sizeof(float) * 4
+            );
 
-    size_t memory_to_allocate = 0 
-        + 10;
+    this->critic_gradient_size = GPU::mem_needed_align(
+            sizeof(float) * (64*64 + 64*1), sizeof(float) * 4
+            );
 
-
+    this->cnn_gradient_size = GPU::mem_needed_align(
+            sizeof(float) * (
+                3*3 * 16 +
+                4*4), sizeof(float) * 4
+            );
 
     }

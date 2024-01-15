@@ -127,6 +127,8 @@ public:
 
 class RLAgent {
 
+    cudaStream_t streams[BATCH_SIZE];
+
     Actor actor;
     Critic critic;
     ConvNetwork conv;                                    
@@ -148,10 +150,11 @@ class RLAgent {
     const uint32_t conv_in;
     const uint32_t conv_out;
 
+    //space where all the weights reside in :) yay
     float* cuda_layer_weights;
+    //same as above but for biases
     float* cuda_layer_biases;
-    float* cuda_current_batch;
-    float* cuda_current_env = nullptr;
+    float* cuda_env = nullptr;
 
     //theta/theta_old
     //should be of size network activations * batch_size
@@ -166,9 +169,22 @@ class RLAgent {
     float* cuda_values;
     float* cuda_returns;
 
+    //size of one times cuda strems
     float* cuda_actor_gradient;
     float* cuda_critic_gradient;
     float* cuda_cnn_gradient;
+
+    //memory for all the biases
+    float* biases;
+
+    //gradient with loss respect to output
+    //prob just one big one idk what Im doing over here Im playing apex rn 
+    //so I gotta go
+    float* cuda_gradient_wrespc_output;
+
+    //this is streams_size * max space needed for gradients for (var name too long to write D:)
+    //two subsequent layers (yeah that much waste memory :O)
+    float* cuda_gradients_with_respect_out;
 
     uint32_t weights_total;
     uint32_t biases_total;
@@ -190,7 +206,7 @@ class RLAgent {
     GPU::Device gpu = GPU::Device(0);
     //we align for 128(4 * 32) bits since thats the most GPU warps can mem access at a time
     Allocator alloc = Allocator(this->gpu, sizeof(float)*4); 
-    Environment env = Environment("../data/parse-mario-level-img/out", this->gpu, this->cuda_current_env);
+    Environment env = Environment("../data/parse-mario-level-img/out", this->gpu, this->cuda_env);
     ThreadPool::Pool pool = ThreadPool::Pool(16);
 
     private:

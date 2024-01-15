@@ -16,11 +16,11 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
 }
 
 ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction actv_func,
-            const uint32_t maps_before, const uint32_t feature_maps, 
+            const uint32_t depth, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
-            const uint32_t kernel_shift, Allocator& alloc, cudaStream_t stream)
-    : gpu(gpu), maps_before(maps_before), feature_maps(feature_maps), actv_func(actv_func),
-      kernel_x(kernel_dim), kernel_y(kernel_dim), kernel_shift(kernel_shift), stream(stream) {
+            const uint32_t kernel_shift, Allocator& alloc)
+    : gpu(gpu), feature_maps(feature_maps), actv_func(actv_func),
+      kernel_x(kernel_dim), kernel_y(kernel_dim), kernel_shift(kernel_shift) {
 
     //calculate the amount of memory needed (in bytes) to keep the stuff in
     const uint32_t kernel_size_bytes = sizeof(float) * kernel_dim * kernel_dim;
@@ -45,11 +45,10 @@ ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction
     }
 }
 
-void ConvolutionalLayer::convolve(float* a, float* out, 
-        const uint32_t a_x, const uint32_t a_y) const noexcept {
+void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cudaStream_t stream) const noexcept {
 
     const std::pair<uint32_t, uint32_t> out_dims = ConvolutionalLayer::calc_output_size(
-            this->kernel_x, this->kernel_y, a_x, a_y, this->kernel_shift
+            b.dat_x, b.dat_y, a.dat_x, a.dat_y, this->kernel_shift
     );
 
     const uint32_t dim_x = out_dims.first;
@@ -60,21 +59,8 @@ void ConvolutionalLayer::convolve(float* a, float* out,
     //either wait or use multiple stream, assuming I want to process multiple pieces
     //of data at once (batch) this would most definitely max out if not go past
     //the stream limit (a necessity in this case)
-    gpu.batched_conv_ver1( 
-            this->cuda_kernel,
-            a,
-            out, 
-            this->kernel_x,
-            a_x,
-            dim_x,
-            this->actv_func,
-            this->feature_maps,
-            a_x * a_y,
-            this->maps_before,
-            this->stream
-        );
 
     //wait for the GPU to finish it's job (stream)
     //keep the data on the GPU tho
-    cudaStreamSynchronize(this->stream);
+    cudaStreamSynchronize(stream);
 }

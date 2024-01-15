@@ -526,6 +526,29 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
             break;
     }
 }
+
+__global__
+void test();
+
+void GPU::Device::layer_convolution(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream) {
+
+    if (!GPU::Device::validate_convolution(b.dat_x, a.dat_x, out.dat_x)) {
+
+        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        return;
+    }
+
+    const size_t space_one = out.dat_x * out.dat_y;
+    const size_t elms_total = space_one * out.dat_z;
+    size_t y_dims = ceilf(static_cast<float>(elms_total) / 32.0); 
+    const size_t y_grid = ceilf(y_dims / 32.0);
+
+    y_dims = (y_dims <= 32) ? y_dims : 32;
+
+    dim3 grid_dimensions(1, y_grid, 1);
+    dim3 block_dimensions(32, y_dims, 1);
+}
+
 __global__
 void max_pooling_ver1(const float* a, float* out, size_t* out_idx, const size_t pool_size,
         const size_t input_dim, const size_t output_dim, const size_t z_dim);

@@ -1,8 +1,15 @@
 #pragma once
 #include "../../../gpu/gpu.h"
 #include "driver_types.h"
+#include <vector>
 
 class Allocator;
+
+struct ConvFilter {
+
+    float* cuda_kernels;
+    const uint32_t depth;
+};
 
 class ConvolutionalLayer {
 
@@ -10,12 +17,15 @@ private:
 
     //kernel
     float* cuda_kernel;
+
+    //filters
+    std::vector<ConvFilter> filters;
+
     //kernel size in bytes
     uint32_t cuda_kernel_size;
+
     //number of feature maps
     uint32_t feature_maps;
-    //number of feature maps before
-    uint32_t maps_before;
 
     uint32_t kernel_x;
     uint32_t kernel_y;
@@ -23,14 +33,17 @@ private:
 
     GPU::Device& gpu;
     GPU::ActivationFunction actv_func;
-    cudaStream_t stream;
+
+private:
+
+    void convolve(GPU::Tensor a, GPU::Tensor b, float* out, cudaStream_t stream) const noexcept;
 
 public:
 
     ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction func,
-            const uint32_t maps_before, const uint32_t feature_maps, 
+            const uint32_t depth, const uint32_t feature_maps, 
             const uint32_t cons_to_prev, const uint32_t kernel_dim, 
-            const uint32_t kernel_shift, Allocator& alloc, cudaStream_t stream);
+            const uint32_t kernel_shift, Allocator& alloc);
 
     //no need for anything special since memory is on the gpu
     ~ConvolutionalLayer() = default;
@@ -41,8 +54,5 @@ public:
             const uint32_t kernel_x, const uint32_t kernel_y,
             const uint32_t input_x, const uint32_t input_y, const uint32_t kernel_shift
         ) noexcept;
-
-    void convolve(float* a, float* out, 
-            const uint32_t a_x, const uint32_t a_y) const noexcept;
 
 };
