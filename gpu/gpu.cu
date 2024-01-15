@@ -527,10 +527,8 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
     }
 }
 
-__global__
-void test();
 
-void GPU::Device::layer_convolution(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream) {
+void GPU::Device::conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream) {
 
     if (!GPU::Device::validate_convolution(b.dat_x, a.dat_x, out.dat_x)) {
 
@@ -538,15 +536,11 @@ void GPU::Device::layer_convolution(Tensor a, Tensor b, Tensor out, uint32_t ski
         return;
     }
 
-    const size_t space_one = out.dat_x * out.dat_y;
-    const size_t elms_total = space_one * out.dat_z;
-    size_t y_dims = ceilf(static_cast<float>(elms_total) / 32.0); 
-    const size_t y_grid = ceilf(y_dims / 32.0);
-
-    y_dims = (y_dims <= 32) ? y_dims : 32;
-
-    dim3 grid_dimensions(1, y_grid, 1);
-    dim3 block_dimensions(32, y_dims, 1);
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+    
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
 }
 
 __global__

@@ -1,0 +1,16 @@
+have multilple streams on diff threads
+on the main thread complete the same calculations as the other threads
+and wait for all the streams to finish then pick prediction
+so basically pseudo code:
+
+//main thread
+
+for stream in streams:
+    job(..., stream)
+
+main_thread_job
+
+for stream in streams:
+    cudaStreamSynchronize(stream)
+
+//now pick actions and stuff thats why its separate :)

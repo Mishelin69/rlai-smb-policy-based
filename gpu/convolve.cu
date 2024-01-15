@@ -271,3 +271,38 @@ void batched_convolve_v2_Sigmoid(const float* k, const float* m, float* o,
         o[y*ox + x] += 1.0 / (1.0 + exp(-sum));
     }
 }
+
+#ifndef MAX_KERNEL_SIZE
+    #define MAX_KERNEL_SIZE 3*3
+#endif
+
+//maybe later Ill try to compare using 
+//__shared and comparing it to this stupid thing
+//just to see the performance diff
+//Ill use __shared input since thats the only thing that these kernels share
+//each ith kernel in a nth filter convolves with ith input
+__global__
+void conv_ReLU2( float* k, float* a, float* out,  int x_max,  int y_max,
+        int k_size,  int a_size,  int out_size,  int in_off, int n_elms) {
+
+    const int id_x = (blockIdx.x * blockDim.x + threadIdx.x);
+    const int id_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const int x = id_x % out_size;
+    const int y = (32*id_y + id_x) / out_size;
+
+    if (x < x_max && y < y_max) {
+
+        for (int n = 0; n < n_elms; ++n) {
+            for (int i = 0; i < k_size; ++i) {
+                for (int j = 0; j < k_size; ++j) {
+
+                    int k_idx = n*k_size*k_size + i*k_size + j;
+                    int i_idx = n*a_size*a_size + i*a_size + x;
+
+                }
+            }
+        }
+
+    }
+}
