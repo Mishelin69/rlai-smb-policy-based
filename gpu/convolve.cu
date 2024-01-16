@@ -282,7 +282,7 @@ void batched_convolve_v2_Sigmoid(const float* k, const float* m, float* o,
 //Ill use __shared input since thats the only thing that these kernels share
 //each ith kernel in a nth filter convolves with ith input
 __global__
-void conv_ReLU2( float* k, float* a, float* out,  int x_max,  int y_max,
+void conv_ReLU2(float* k, float* a, float* out,  int x_max,  int y_max,
         int k_size,  int a_size,  int out_size,  int in_off, int n_elms) {
 
     const int id_x = (blockIdx.x * blockDim.x + threadIdx.x);
@@ -298,7 +298,7 @@ void conv_ReLU2( float* k, float* a, float* out,  int x_max,  int y_max,
                 for (int j = 0; j < k_size; ++j) {
 
                     int k_idx = n*k_size*k_size + i*k_size + j;
-                    int i_idx = n*a_size*a_size + i*a_size + x;
+                    int i_idx = n*a_size*a_size + y*a_size + i*a_size + x + j;
 
                 }
             }
