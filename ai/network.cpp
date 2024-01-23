@@ -63,7 +63,7 @@ RLAgent::RLAgent():
     critic_layers(2), critic_in(128), critic_out(1), 
     conv_layers(5), conv_in(MAP_SIZE), conv_out(64) {
 
-    for (size_t i = 0; i < BATCH_SIZE; ++i) {
+    for (size_t i = 0; i < CUDA_STREAMS; ++i) {
 
         auto ret = cudaStreamCreate(&(this->streams[i]));
 

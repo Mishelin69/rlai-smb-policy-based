@@ -8,6 +8,7 @@
 #include <random>
 
 #define BATCH_SIZE 32
+#define CUDA_STREAMS 4
 
 #ifndef THREAD_POOL_SIZE
     #define THREAD_POOL_SIZE 16
@@ -98,6 +99,7 @@ private:
     //not lazy anymore 0:
     ConvolutionalLayer l1_13x13_16x3x3; //ReLU activation
     ConvolutionalLayer l2_11x11_32x4x4; //ReLU activation
+    //DONT FORGET TO RESET DELTA STUFF PLS FOR MAX POOLING TO 0 :sob:
     MaxPooling l3_8x8_2x2;
     ConvolutionalLayer l4_4x4_32x3x3; //ReLU activation
     DenseLayer l5_2x2x32_64;
@@ -127,7 +129,7 @@ public:
 
 class RLAgent {
 
-    cudaStream_t streams[BATCH_SIZE];
+    cudaStream_t streams[CUDA_STREAMS];
 
     Actor actor;
     Critic critic;
@@ -161,7 +163,7 @@ class RLAgent {
     float* cuda_activations;
     float* old_cuda_activations;
 
-    //copied over from cuda_activations, this is only for confort
+    //copied over from cuda_activations, this is only for comfort
     //3 extra floats wont kill anybody
     //this will be on CPU
     float* cuda_final_predict_pass;
@@ -183,7 +185,7 @@ class RLAgent {
     float* cuda_gradient_wrespc_output;
 
     //this is streams_size * max space needed for gradients for (var name too long to write D:)
-    //two subsequent layers (yeah that much waste memory :O)
+    //two subsequent layers (yeah that much wasted memory :O)
     float* cuda_gradients_with_respect_out;
 
     uint32_t weights_total;

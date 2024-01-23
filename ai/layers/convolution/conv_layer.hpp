@@ -18,6 +18,9 @@ private:
     //kernel
     float* cuda_kernel;
 
+    //biases gpu
+    float* cuda_bias;
+
     //filters
     std::vector<ConvFilter> filters;
 
@@ -26,10 +29,10 @@ private:
 
     //number of feature maps
     uint32_t feature_maps;
+    uint32_t input_chanels;
 
     uint32_t kernel_x;
     uint32_t kernel_y;
-    uint32_t kernel_shift;
 
     GPU::Device& gpu;
     GPU::ActivationFunction actv_func;
@@ -42,8 +45,8 @@ public:
 
     ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction func,
             const uint32_t depth, const uint32_t feature_maps, 
-            const uint32_t cons_to_prev, const uint32_t kernel_dim, 
-            const uint32_t kernel_shift, Allocator& alloc);
+            const uint32_t input_chanels, const uint32_t kernel_dim, 
+            const uint32_t input, Allocator& alloc);
 
     //no need for anything special since memory is on the gpu
     ~ConvolutionalLayer() = default;

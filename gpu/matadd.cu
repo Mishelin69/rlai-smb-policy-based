@@ -14,3 +14,19 @@ void matadd_v1(float* A, float* B, float* C,
 		C[y * c_row + x] = A[y * c_row + x] + B[y * c_row + x];
 	}
 }
+
+__global__
+void conv_add_gpu(float* A, float* B, int a_dim, int b_dim) {
+
+    const int id_x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int id_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const int x = id_x % b_dim;
+    const int y = (32*id_y + id_x) / b_dim;
+
+    if (x < b_dim && y < b_dim) {
+
+        B[y*b_dim + x] = B[y*b_dim + x] + A[y*b_dim + x];
+    }
+
+}

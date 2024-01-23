@@ -210,9 +210,13 @@ public:
 
     void conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream);
 
+    void conv_add(Tensor a, Tensor b, cudaStream_t stream);
+
     //This is where I actually started using brain instead of being dumb :)
     void batched_max_pool_ver1(const Tensor input, Tensor out, size_t* idx_ptr, 
             const size_t pool_size, const cudaStream_t stream) const noexcept;
+
+    void max_pool_ver2(const Tensor input, Tensor out, int* idx, const int pool_size, cudaStream_t stream);
 
     void matmul_elementwise(Tensor a, Tensor b, Tensor out, 
             const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept;

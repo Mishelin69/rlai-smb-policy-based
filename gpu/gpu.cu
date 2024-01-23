@@ -527,6 +527,9 @@ void GPU::Device::batched_conv_ver1(const float* kernel, const float* dat, float
     }
 }
 
+__global__
+void conv_ReLU2(float* k, float* a, float* out, int k_size, 
+        int a_size,  int out_size, int n_elms);
 
 void GPU::Device::conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream) {
 
@@ -541,6 +544,26 @@ void GPU::Device::conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaS
     
     dim3 grid_dimensions(1, 1, 1);
     dim3 block_dimensions(32, elm_y, 1);
+
+    conv_ReLU2<<<grid_dimensions, block_dimensions, 0, stream>>>(
+        b.dat_pointer, a.dat_pointer, out.dat_pointer, 
+        b.dat_x, a.dat_x, out.dat_x, b.dat_z 
+    );
+}
+
+__global__
+void conv_add_gpu(float* A, float* B, int a_dim, int b_dim);
+
+void GPU::Device::conv_add(Tensor a, Tensor b, cudaStream_t stream) {
+
+    const size_t elm_total = b.dat_y * b.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+    conv_add_gpu<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            a.dat_pointer, b.dat_pointer, a.dat_x, b.dat_x);
 }
 
 __global__
@@ -562,6 +585,23 @@ void GPU::Device::batched_max_pool_ver1(const Tensor input, Tensor out, size_t* 
             out.dat_x, 
             input.dat_z
             );
+
+}
+__global__
+void pool_ver2(const float* input, float* out, int* idx, int in_dim, int out_dim, int pool_size);
+
+void max_pool_ver2(const GPU::Tensor input, GPU::Tensor out, int* idx, const int pool_size, cudaStream_t stream) {
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+    pool_ver2<<<grid_dimensions, block_dimensions, 0, stream>>>(
+        input.dat_pointer, out.dat_pointer, idx, 
+        input.dat_x, out.dat_x, pool_size
+    );
 
 }
 

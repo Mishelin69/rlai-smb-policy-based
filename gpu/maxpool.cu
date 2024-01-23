@@ -26,3 +26,34 @@ void max_pooling_ver1(const float* a, float* out, size_t* out_idx, const size_t 
         out_idx[y*output_dim + x] = max_index;
     }
 }
+
+__global__
+void pool_ver2(const float* input, float* out, int* idx, int in_dim, int out_dim, int pool_size) {
+
+    const int id_x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int id_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const int x = id_x % out_dim;
+    const int y = (32*id_y + id_x) / out_dim;
+
+    if (x < out_dim && y < out_dim) {
+
+        float max = input[y*in_dim*in_dim + x*pool_size];
+        int max_index = y*in_dim*in_dim + x*pool_size;
+
+        for (int i = 0; i < pool_size; ++i) {
+            for (int j = 0; j < pool_size; ++j) {
+
+                if (input[y*in_dim*in_dim + x*pool_size + i*in_dim + j] > max) {
+
+                    max = input[y*in_dim*in_dim + x*pool_size + i*in_dim + j];
+                    max_index = y*in_dim*in_dim + x*pool_size + i*in_dim + j;
+                }
+            }
+        }
+
+        out[y*out_dim + x] = max;
+        idx[y*out_dim + x] = max_index;
+    }
+
+}
