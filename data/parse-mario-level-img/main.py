@@ -9,6 +9,8 @@ from numpy.typing import NDArray
 
 from typing import List, Tuple
 
+a2 = []
+
 
 ImageData = NDArray
 def load_matches() -> List[Tuple[ImageData, float]]:
@@ -70,22 +72,25 @@ def is_equal(a: NDArray, a_xoff: int, a_yoff: int, b: NDArray) -> bool:
     #NOTE: This when uncommented can be used to get tiles that are not of the same colour 
     #      Good when you want to save tiles so they match over here
     #
-    # arr = []
+    #arr = []
 
-    # for i in range(16):
-    #     for j in range(16):
+    #for i in range(16):
+         #for j in range(16):
 
-    #         arr.append(a[a_yoff*16 + i][a_xoff*16 + j])
-
-    # if len(set(arr)) == 1:
-    #     return False
+             #arr.append(a[a_yoff*16 + i][a_xoff*16 + j])
 
 
-    # _arr = np.reshape(np.array(arr), (16, 16))
-    # Image.fromarray(_arr).show()
-    # Image.fromarray(_arr).save("./sprite/brick2.png")
+    #if len(set(arr)) == 1 or arr in a2:
 
-    # input()
+        #return False
+
+    #a2.append(arr)
+
+    #_arr = np.reshape(np.array(arr), (16, 16))
+    #Image.fromarray(_arr).show()
+    #Image.fromarray(_arr).save("./sprite/brick2.png")
+
+    #input()
 
     for i in range(16):
         for j in range(16):

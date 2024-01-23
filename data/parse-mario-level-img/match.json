@@ -1,7 +1,15 @@
 {
     "matches": [
         {
-            "path": "C:/Users/milos/Desktop/home/coding/usr/py/mario-level-parse/parse-mario-level-img/sprite/brick.png",
+            "path": "/home/pandos/coding/soc/rlai-smb-policy-based/data/parse-mario-level-img/sprite/brick.png",
+            "value": 1
+        },
+        {
+            "path": "/home/pandos/coding/soc/rlai-smb-policy-based/data/parse-mario-level-img/sprite/brick3.png",
+            "value": 1
+        },
+        {
+            "path": "/home/pandos/coding/soc/rlai-smb-policy-based/data/parse-mario-level-img/sprite/brick4.png",
             "value": 1
         }
     ]

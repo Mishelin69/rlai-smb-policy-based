@@ -13,7 +13,9 @@ with open("./15x224_1-1.png.dat", "r") as f:
 
         if x == '':
             continue 
-
+        if x == '\n':
+            continue
+            
         img_dat.append(float(x) * 1000)
 
 
