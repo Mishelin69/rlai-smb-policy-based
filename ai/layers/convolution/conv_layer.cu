@@ -105,7 +105,7 @@ void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cuda
                 GPU::Tensor { 
                 this->cuda_bias + dim_x*dim_y*i, 
                 dim_x,
-                dim_y, 
+                1,//1 because same bias for everything 
                 1 
                 },
 

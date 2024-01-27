@@ -80,6 +80,7 @@ public:
     //first we calculate the loss
     //lt = (Vt - Rt)^2
     //sum them up and use the scalar to calulate the gradient with
+    //comment: why so fancy calling it a "scalar" lol, what was I thinking :D
     //respect to the loss
     void calculate_gradient(float* values, float* returns, float* out);
 
@@ -171,7 +172,10 @@ class RLAgent {
     float* cuda_values;
     float* cuda_returns;
 
-    //size of one times cuda strems
+    //this is not with respect to the output, this is 
+    //just for weights and biases maybe idk, 
+    //prob it'll be a separate thing for that
+    //size of one times cuda streams
     float* cuda_actor_gradient;
     float* cuda_critic_gradient;
     float* cuda_cnn_gradient;

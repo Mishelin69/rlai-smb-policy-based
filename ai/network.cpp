@@ -29,6 +29,7 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
     //determine if it's time for training, then we can continue
     if (this->current_reward == this->batch_size) {
         learn();
+        //DONT FORGET TO RESET ENV AFTER THIS, CURRENT REWARD ALSO
     }
 
     //do a passtrough on a the current state and move data to CPU
