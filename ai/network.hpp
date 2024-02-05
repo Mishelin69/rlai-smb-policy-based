@@ -153,6 +153,11 @@ class RLAgent {
     const uint32_t conv_in;
     const uint32_t conv_out;
 
+    ////////////////////////////////////////////////////////////////////////
+    //NOTE: FOR MORE INFO ABOUT MEMORY LAYOUT PLEASE LOOK INTO network.cpp//
+    /////////ALL THE SPECIFICATIONS ARE IN THE RLAgent CONSTRUCTOR/////////
+    ///////////////////////////////////////////////////////////////////////
+
     //space where all the weights reside in :) yay
     float* cuda_layer_weights;
     //same as above but for biases
@@ -167,7 +172,7 @@ class RLAgent {
     //copied over from cuda_activations, this is only for comfort
     //3 extra floats wont kill anybody
     //this will be on CPU
-    float* cuda_final_predict_pass;
+    float* cpu_final_predict_pass;
 
     float* cuda_values;
     float* cuda_returns;
@@ -179,14 +184,6 @@ class RLAgent {
     float* cuda_actor_gradient;
     float* cuda_critic_gradient;
     float* cuda_cnn_gradient;
-
-    //memory for all the biases
-    float* biases;
-
-    //gradient with loss respect to output
-    //prob just one big one idk what Im doing over here Im playing apex rn 
-    //so I gotta go
-    float* cuda_gradient_wrespc_output;
 
     //this is streams_size * max space needed for gradients for (var name too long to write D:)
     //two subsequent layers (yeah that much wasted memory :O)
@@ -203,6 +200,9 @@ class RLAgent {
     size_t critic_gradient_size;
     size_t cnn_gradient_size;
 
+    size_t activations_total;
+    size_t grad_with_out;
+
     //For Stochastic Policy Action Selection
     std::random_device rd;
     std::mt19937 gen; 
@@ -213,7 +213,7 @@ class RLAgent {
     //we align for 128(4 * 32) bits since thats the most GPU warps can mem access at a time
     Allocator alloc = Allocator(this->gpu, sizeof(float)*4); 
     Environment env = Environment("../data/parse-mario-level-img/out", this->gpu, this->cuda_env);
-    ThreadPool::Pool pool = ThreadPool::Pool(16);
+    ThreadPool::Pool pool = ThreadPool::Pool(CUDA_STREAMS);
 
     private:
 

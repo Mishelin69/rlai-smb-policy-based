@@ -3,7 +3,7 @@
 #include <cuda_runtime_api.h>
 #include <iostream>
 
-DenseLayer::DenseLayer(GPU::Device& gpu, Allocator& alloc, const size_t neurons, 
+DenseLayer::DenseLayer(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
         const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func)
     : gpu(gpu), input_shape(input), neurons(neurons), actv_func(actv_func), der_actv_func(der_actv_func) {
 
@@ -11,12 +11,7 @@ DenseLayer::DenseLayer(GPU::Device& gpu, Allocator& alloc, const size_t neurons,
         this->mat_x = input;
         this->biases = neurons;
 
-        float* cudaMat = alloc.alloc_space(mat_y * mat_x);
-
-        if (!cudaMat) {
-            std::cerr << "DenseLayer::DenseLayer() | Error: Couldn't allocate memory for neurons!!" << std::endl;
-            exit(-1);
-        }
+        float* cudaMat = cuda_w; 
 
         int res = gpu.random_numbers(cudaMat, mat_y * mat_x);
 
@@ -26,13 +21,7 @@ DenseLayer::DenseLayer(GPU::Device& gpu, Allocator& alloc, const size_t neurons,
             std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing neurons!!" << std::endl; 
         }
 
-        float* cudaBias = alloc.alloc_space(biases);
-
-        if (!cudaBias) {
-            std::cerr << "DenseLayer::DenseLayer() | Error: Couldn't allocate memory for biases!!" << std::endl;
-            exit(-1);
-        }
-
+        float* cudaBias = cuda_b;
         res = gpu.random_numbers(cudaBias, biases);
 
         if (res != 0) {
@@ -77,6 +66,7 @@ void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) co
     cudaStreamSynchronize(stream);
 }
 
+//fix this to do the correct thing :(
 void DenseLayer::gradient_calculation(const GPU::Tensor w_layer_before, const GPU::Tensor activations, 
         const GPU::Tensor gradient, GPU::Tensor out, const cudaStream_t stream) const noexcept {
 

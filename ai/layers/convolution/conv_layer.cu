@@ -18,7 +18,7 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
 ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction actv_func,
             const uint32_t depth, const uint32_t feature_maps, 
             const uint32_t input_chanels, const uint32_t kernel_dim, 
-            const uint32_t input, Allocator& alloc)
+            const uint32_t input, float* cuda_w, float* cuda_b)
     : gpu(gpu), feature_maps(feature_maps), actv_func(actv_func),
     kernel_x(kernel_dim), kernel_y(kernel_dim), input_chanels(input_chanels) {
 
@@ -27,26 +27,12 @@ ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction
         const uint32_t mem_size = kernel_dim * kernel_dim * feature_maps * input_chanels;
         this->cuda_kernel_size = kernel_size_bytes;
 
-        float* cuda_p = alloc.alloc_space(mem_size);
-
-        if (!cuda_p) {
-            std::cerr << "Error allocating memory on the gpu!! exiting !!!" << std::endl;
-            exit(-1);
-        }
-
-        this->cuda_kernel = cuda_p;
+        this->cuda_kernel = cuda_w;
 
         auto out = calc_output_size(kernel_dim, kernel_dim, input, input, 1);
         auto out_x = out.first;
 
-        cuda_p = alloc.alloc_space(feature_maps * out_x * out_x);
-
-        if (!cuda_p) {
-            std::cerr << "Error allocating memory on the gpu!! exiting !!!" << std::endl;
-            exit(-1);
-        }
-
-        this->cuda_bias = cuda_p;
+        this->cuda_bias = cuda_b;
 
         for (uint32_t i = 0; i < feature_maps; ++i) {
             this->filters.push_back(ConvFilter {
@@ -106,6 +92,8 @@ void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cuda
                 this->cuda_bias + dim_x*dim_y*i, 
                 dim_x,
                 1,//1 because same bias for everything 
+                //also bias is just 1D vector where its shape is (n,) 
+                //where n => number of output feature maps
                 1 
                 },
 

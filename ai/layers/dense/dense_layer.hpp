@@ -1,4 +1,5 @@
 #pragma once
+
 #include "../../../gpu/gpu.h"
 #include "driver_types.h"
 
@@ -24,7 +25,7 @@ private:
 
 public:
 
-    DenseLayer(GPU::Device& gpu, Allocator& alloc, const size_t neurons, 
+    DenseLayer(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
             const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func);
     DenseLayer(DenseLayer& other) = default;
 

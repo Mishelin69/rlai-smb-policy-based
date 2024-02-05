@@ -134,7 +134,6 @@ void Environment::update_frame(
         this->timer = timer;
     }
 
-    this->update_player();
 
     //call this to reset enemy position in the world
     this->unsimulate_enemies();
@@ -180,6 +179,9 @@ void Environment::update_frame(
     }
 
     simulate_enemies();
+
+    this->update_player();
+
     this->mirror();
 
     compute_reward();

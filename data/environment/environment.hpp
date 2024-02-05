@@ -62,12 +62,14 @@ private:
     Vector2 enemy_pos[MAX_ENEMIES_ON_SCREEN];
     size_t enemies_on_screen;
 
-    //store calculated rewards
-    std::vector<float> rewards;
-    size_t rindex;
     bool player_dead;
 
 public:
+    //
+    //store calculated rewards
+    std::vector<float> rewards;
+
+    size_t rindex;
     float* cuda_env;
 
 private:

@@ -26,7 +26,9 @@ void conv_add_gpu(float* A, float* B, int a_dim, int b_dim) {
 
     if (x < b_dim && y < b_dim) {
 
-        B[y*b_dim + x] = B[y*b_dim + x] + A[y*b_dim + x];
+        const int feature_map_bias_index = y*b_dim + x / (b_dim*b_dim);
+
+        B[y*b_dim + x] = B[feature_map_bias_index] + A[y*b_dim + x];
     }
 
 }

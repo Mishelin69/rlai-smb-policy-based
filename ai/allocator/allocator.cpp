@@ -80,5 +80,5 @@ float* Allocator::alloc_space(const size_t bytes) {
         return cuda_p;
     }
 
-    return NULL;
+    return nullptr;
 }
