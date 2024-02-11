@@ -25,6 +25,9 @@ private:
 
 public:
 
+    void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
+            const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func);
+
     DenseLayer(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
             const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func);
     DenseLayer(DenseLayer& other) = default;
@@ -34,6 +37,9 @@ public:
 
     void passthrough(float* a, float* out , const cudaStream_t stream) const noexcept;
 
-    void gradient_calculation(const GPU::Tensor w_layer_before, const GPU::Tensor activations, 
+    //THIS NEEDS TO BE REWORKED AND SO DOES EVERY GRADIENT CALCULATION (IF ANY IDK?)
+    //TO WORK WITH MY CODE (OTHERWISE ITS FINE)
+    //SEPARATE GwR TO THE OUTPUT
+    void gradient_calculation(const GPU::Tensor activations, 
             const GPU::Tensor gradient, GPU::Tensor out, const cudaStream_t stream) const noexcept;
 };

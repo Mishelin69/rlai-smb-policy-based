@@ -37,21 +37,26 @@ private:
     GPU::Device& gpu;
     GPU::ActivationFunction actv_func;
 
-private:
+public:
 
     void convolve(GPU::Tensor a, GPU::Tensor b, float* out, cudaStream_t stream) const noexcept;
 
-public:
+    void init_self(GPU::Device& gpu, GPU::ActivationFunction func,
+            const uint32_t feature_maps, 
+            const uint32_t input_chanels, const uint32_t kernel_dim, 
+            const uint32_t input, float* cuda_w, float* cuda_b);
+
 
     ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction func,
-            const uint32_t depth, const uint32_t feature_maps, 
+            const uint32_t feature_maps, 
             const uint32_t input_chanels, const uint32_t kernel_dim, 
             const uint32_t input, float* cuda_w, float* cuda_b);
 
     //no need for anything special since memory is on the gpu
     ~ConvolutionalLayer() = default;
 
-    ConvolutionalLayer(ConvolutionalLayer& other) = delete;
+    ConvolutionalLayer(ConvolutionalLayer& other) = default;
+    ConvolutionalLayer(const ConvolutionalLayer& other) = default;
 
     static std::pair<uint32_t, uint32_t> calc_output_size(
             const uint32_t kernel_x, const uint32_t kernel_y,

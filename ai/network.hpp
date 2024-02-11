@@ -23,6 +23,51 @@
     #define RLAGENT_GAMMA 0.9f
 #endif
 
+const size_t CNN_L1_IN = 13;
+const size_t CNN_L1_OUT = 11;
+const size_t CNN_L1_IN_DEPTH = 1;
+const size_t CNN_L1_OUT_DEPTH = 16;
+
+const size_t CNN_L2_IN = 11;
+const size_t CNN_L2_OUT = 8;
+const size_t CNN_L2_IN_DEPTH = CNN_L1_OUT_DEPTH;
+const size_t CNN_L2_OUT_DEPTH = 32;
+
+const size_t CNN_L3_IN = 8;
+const size_t CNN_L3_OUT = 4;
+const size_t CNN_L3_IN_DEPTH = CNN_L2_OUT_DEPTH;
+const size_t CNN_L3_OUT_DEPTH = 32;
+
+const size_t CNN_L4_IN = 4;
+const size_t CNN_L4_OUT = 2;
+const size_t CNN_L4_IN_DEPTH = CNN_L3_OUT_DEPTH;
+const size_t CNN_L4_OUT_DEPTH = 32;
+
+const size_t CNN_L5_IN = 2;
+const size_t CNN_L5_OUT = 64;
+const size_t CNN_L5_IN_DEPTH = CNN_L4_OUT_DEPTH;
+const size_t CNN_L5_OUT_DEPTH = 1;
+//----------------================----------------
+const size_t CRITIC_L1_IN = 64;
+const size_t CRITIC_L1_OUT = 64;
+const size_t CRITIC_L1_IN_DEPTH = CNN_L5_OUT_DEPTH;
+const size_t CRITIC_L1_OUT_DEPTH = 1;
+
+const size_t CRITIC_L2_IN = 64;
+const size_t CRITIC_L2_OUT = 1;
+const size_t CRITIC_L2_IN_DEPTH = CRITIC_L1_OUT_DEPTH;
+const size_t CRITIC_L2_OUT_DEPTH = 1;
+//----------------================----------------
+const size_t ACTOR_L1_IN = 64;
+const size_t ACTOR_L1_OUT = 64;
+const size_t ACTOR_L1_I_DEPTHN = CNN_L5_OUT_DEPTH;
+const size_t ACTOR_L1_OUT_DEPTH = 1;
+
+const size_t ACTOR_L2_IN = 64;
+const size_t ACTOR_L2_OUT = 3;
+const size_t ACTOR_L2_IN_DEPTH = ACTOR_L1_OUT_DEPTH;
+const size_t ACTOR_L2_OUT_DEPTH = 3;
+
 #include <cstdint>
 
 class Actor {
@@ -55,6 +100,7 @@ public:
     //shouldn't be an issue
     void apply_gradient(float* gradients, float loss);
 
+    void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b);
 };
 
 class Critic {
@@ -88,6 +134,7 @@ public:
     //shouldn't be an issue
     void apply_gradient(float* gradients, float loss);
 
+    void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b);
 };
 
 //include conv_layer_biases, max pooling, first without and then with
@@ -111,12 +158,14 @@ private:
 
 public:
 
-    void pass(float* state, float* out);
+    void pass(float* state, float* out, cudaStream_t stream);
 
     ConvNetwork();
     ~ConvNetwork();
-    ConvNetwork(const ConvNetwork& other);
+    ConvNetwork(ConvNetwork& other) = default;
     ConvNetwork(const ConvNetwork&& other);
+
+    void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b);
 
     //this will be calculated two times each training steps 
     //due to Actor and Critic shared architecture
@@ -160,8 +209,10 @@ class RLAgent {
 
     //space where all the weights reside in :) yay
     float* cuda_layer_weights;
+    float* cuda_layer_weights_old;
     //same as above but for biases
     float* cuda_layer_biases;
+    float* cuda_layer_biases_old;
     float* cuda_env = nullptr;
 
     //theta/theta_old
@@ -174,6 +225,8 @@ class RLAgent {
     //this will be on CPU
     float* cpu_final_predict_pass;
 
+    float* cuda_rewards;
+    float* cuda_advantage;
     float* cuda_values;
     float* cuda_returns;
 
@@ -217,7 +270,7 @@ class RLAgent {
 
     private:
 
-    void passtrough(Actor actor, ConvNetwork conv, float* preds);
+    void passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i);
 
     //performs Stochastic Policy Action Selection
     uint32_t pick_action();

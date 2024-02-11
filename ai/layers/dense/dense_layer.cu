@@ -1,5 +1,4 @@
 #include "./dense_layer.hpp"
-#include "../../allocator/allocator.hpp"
 #include <cuda_runtime_api.h>
 #include <iostream>
 
@@ -28,6 +27,41 @@ DenseLayer::DenseLayer(GPU::Device& gpu, float* cuda_w, float* cuda_b, const siz
             std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing biases!!" << std::endl; 
         }
     }
+
+void DenseLayer::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
+        const size_t input, const GPU::ActivationFunction actv_func, 
+        const GPU::ActivationFunction der_actv_func) {
+
+    this->gpu = gpu;
+    this->input_shape = input;
+    this->neurons = neurons;
+    this->actv_func = actv_func;
+    this->der_actv_func = der_actv_func;
+
+    this->mat_y = neurons;
+    this->mat_x = input;
+    this->biases = neurons;
+
+    float* cudaMat = cuda_w; 
+
+    int res = gpu.random_numbers(cudaMat, mat_y * mat_x);
+
+    //!!res would be crazy but correct :D since only 0 evals as false (talking numbers ofc)
+    //(negative numbers eval to true since they hold some value :| )
+    if (res != 0) {
+        std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing neurons!!" << std::endl; 
+    }
+
+    float* cudaBias = cuda_b;
+    res = gpu.random_numbers(cudaBias, biases);
+
+    if (res != 0) {
+        std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing biases!!" << std::endl; 
+    }
+
+
+}
+
 
 void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) const noexcept {
 
@@ -67,7 +101,7 @@ void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) co
 }
 
 //fix this to do the correct thing :(
-void DenseLayer::gradient_calculation(const GPU::Tensor w_layer_before, const GPU::Tensor activations, 
+void DenseLayer::gradient_calculation(const GPU::Tensor activations, 
         const GPU::Tensor gradient, GPU::Tensor out, const cudaStream_t stream) const noexcept {
 
     gpu.matmul_ver1_gpu(
@@ -80,9 +114,11 @@ void DenseLayer::gradient_calculation(const GPU::Tensor w_layer_before, const GP
             mat_y, 
             out.dat_x, 
             out.dat_y, 
-            GPU::ActivationFunction::None, 
+            this->actv_func, 
             stream
             );
 
     gpu.matmul_elementwise(out, activations, out, stream, der_actv_func);
+
+    cudaStreamSynchronize(stream);
 }

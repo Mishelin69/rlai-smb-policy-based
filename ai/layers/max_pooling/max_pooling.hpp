@@ -16,9 +16,11 @@ private:
 
 public:
 
+    void init_self(GPU::Device& gpu, int pool_size, uint32_t n_inputs, uint32_t in_size);
+
     MaxPooling(GPU::Device& gpu, int pool_size, uint32_t n_inputs, uint32_t in_size);
     ~MaxPooling();
-    MaxPooling(MaxPooling& other);
+    MaxPooling(MaxPooling& other) = default;
     MaxPooling(MaxPooling&& other);
 
     void pool(GPU::Tensor in, GPU::Tensor out, cudaStream_t stream);
