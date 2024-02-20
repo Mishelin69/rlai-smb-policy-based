@@ -454,6 +454,9 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     //ugghh breaking safety stuff maybe but do I care? Hell nah
     //I can do whatever I want with my ptrs, whos gonna stop me
     input.dat_pointer = output.dat_pointer;
+    input.dat_x = CNN_L1_OUT;
+    input.dat_y = CNN_L1_OUT;
+    input.dat_z = CNN_L1_OUT_DEPTH;
     output.dat_pointer += CNN_L1_OUT*CNN_L1_OUT*CNN_L1_OUT_DEPTH;
 
     //update input and output tensors with their respective #define thingy constant ?
@@ -465,6 +468,40 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     l2_11x11_32x4x4.convolve(input, GPU::Tensor {
             nullptr, 4, 4, 32 }, output.dat_pointer, stream);
 
+    input.dat_x = CNN_L2_OUT;
+    input.dat_y = CNN_L2_OUT;
+    input.dat_z = CNN_L2_OUT_DEPTH;
+    input.dat_pointer += CNN_L1_OUT*CNN_L1_OUT*CNN_L1_OUT_DEPTH;
+    output.dat_x = input.dat_x / 2;
+    output.dat_y = input.dat_y / 2;
+    output.dat_z = CNN_L2_OUT_DEPTH;
+    output.dat_pointer += CNN_L2_OUT*CNN_L2_OUT*CNN_L2_OUT_DEPTH;
+
+    l3_8x8_2x2.pool(input, output, stream);
+
+    input.dat_x = CNN_L3_OUT;
+    input.dat_y = CNN_L3_OUT;
+    input.dat_z = CNN_L3_OUT_DEPTH;
+    input.dat_pointer += CNN_L2_OUT*CNN_L2_OUT*CNN_L2_OUT_DEPTH;
+    output.dat_x = CNN_L4_OUT;
+    output.dat_y = CNN_L4_OUT;
+    output.dat_z = CNN_L3_OUT_DEPTH;
+    output.dat_pointer += CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH;
+
+    l4_4x4_32x3x3.convolve(input, GPU::Tensor {
+            nullptr, 3, 3, 32 }, output.dat_pointer, stream);
+
+    input.dat_x = CNN_L4_OUT;
+    input.dat_y = CNN_L4_OUT;
+    input.dat_z = CNN_L4_OUT_DEPTH;
+    input.dat_pointer += CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH;
+    output.dat_x = CNN_L5_OUT;
+    output.dat_y = CNN_L5_OUT;
+    output.dat_z = CNN_L4_OUT_DEPTH;
+    output.dat_pointer += CNN_L4_OUT*CNN_L4_OUT*CNN_L4_OUT_DEPTH;
+
+    //I know a bug is somewhere over here I defo fucked up
+    l5_2x2x32_64.passthrough(input.dat_pointer, input.dat_pointer, stream);
 }
 
 ////////////////////////////////////////////////////////
