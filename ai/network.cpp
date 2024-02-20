@@ -443,8 +443,27 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     GPU::Tensor output = GPU::Tensor { cuda_out, CNN_L1_OUT, CNN_L1_OUT, CNN_L2_OUT_DEPTH };
 
     //go with nullptr just to verify something :)
+    //the 'b' tensor is useless since its represented by the filters themself
+    //if I want to do it this way I should make a static method that will do that 
+    //might as well make use of the gpu API that I have 
+    //its fine (not that bad as it used to be I improved it a bit)
     l1_13x13_16x3x3.convolve(input, GPU::Tensor {
             nullptr, 3, 3, 16 }, output.dat_pointer, stream);
+
+    //shift out ptr and the in ptr
+    //ugghh breaking safety stuff maybe but do I care? Hell nah
+    //I can do whatever I want with my ptrs, whos gonna stop me
+    input.dat_pointer = output.dat_pointer;
+    output.dat_pointer += CNN_L1_OUT*CNN_L1_OUT*CNN_L1_OUT_DEPTH;
+
+    //update input and output tensors with their respective #define thingy constant ?
+    //okay they're all consts :|
+
+    //Ok I got sidetracked but still Im happy with what progress I made today
+    //I sort of found motivation again, maybe I should seek some help
+
+    l2_11x11_32x4x4.convolve(input, GPU::Tensor {
+            nullptr, 4, 4, 32 }, output.dat_pointer, stream);
 
 }
 

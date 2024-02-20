@@ -1,5 +1,4 @@
 #include "./conv_layer.hpp"
-#include "../../allocator/allocator.hpp"
 #include <cuda_runtime_api.h>
 #include <iostream>
 
@@ -58,6 +57,7 @@ ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction
     }
 
 //Ughhh God Im so lazy please finish this while Im away :) <3
+//He did not finish it, I sadly had to do it myself :( not cool
 void ConvolutionalLayer::init_self(GPU::Device& gpu, GPU::ActivationFunction func,
         const uint32_t feature_maps, 
         const uint32_t input_chanels, const uint32_t kernel_dim, 
@@ -114,6 +114,11 @@ void ConvolutionalLayer::init_self(GPU::Device& gpu, GPU::ActivationFunction fun
 //a: input
 //b: the kernel
 //out: the out pointer
+//My little note some time layer, why b if b is member ????
+//Im literraly creating new Tensor each loop so why b in the first place
+//I guess Ill keep it in because I dont want it to break yk
+//I honestly have no clue if it'll actually break but Im not 
+//playing the devil over here JUST IN CASE! :-)
 void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cudaStream_t stream) const noexcept {
 
     const std::pair<uint32_t, uint32_t> out_dims = ConvolutionalLayer::calc_output_size(

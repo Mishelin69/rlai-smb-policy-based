@@ -40,6 +40,12 @@ public:
     //THIS NEEDS TO BE REWORKED AND SO DOES EVERY GRADIENT CALCULATION (IF ANY IDK?)
     //TO WORK WITH MY CODE (OTHERWISE ITS FINE)
     //SEPARATE GwR TO THE OUTPUT
+    //I think the "issue" is that Im thinking of it as an inout even though its not (?)
+    //Actually its totally fine to read from "gradient" and it doesnt matter that 
+    //its the same as out (not the same pointer its shifted) and when calculating normal stuff
+    //this doesnt suffer from the inout issue but it breaks all the safety rules but do I care? 
+    //ofc not :)
+    //I mean what was I yappin about brotherrrr
     void gradient_calculation(const GPU::Tensor activations, 
             const GPU::Tensor gradient, GPU::Tensor out, const cudaStream_t stream) const noexcept;
 };

@@ -101,6 +101,9 @@ void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) co
 }
 
 //fix this to do the correct thing :(
+//yeah its not doing that buddy :)
+//Ill need to adjust it, to be more modular or something else idk make either a diff 
+//function or just do it differentlya (pain) Ill figure it out later (soon pain again)
 void DenseLayer::gradient_calculation(const GPU::Tensor activations, 
         const GPU::Tensor gradient, GPU::Tensor out, const cudaStream_t stream) const noexcept {
 
@@ -118,6 +121,7 @@ void DenseLayer::gradient_calculation(const GPU::Tensor activations,
             stream
             );
 
+    //the end thing where you multiply by funciton derivartive the original output !:)
     gpu.matmul_elementwise(out, activations, out, stream, der_actv_func);
 
     cudaStreamSynchronize(stream);
