@@ -129,7 +129,7 @@ RLAgent::RLAgent():
     size_t actor_biases = 
         GPU::mem_needed_align(sizeof(float) * 
                 //actor:wq
-                64 + 3, sizeof(float) * 4);
+                64 + AGENT_NUM_ACTIONS, sizeof(float) * 4);
 
     this->biases_total = 
         //cnn
@@ -145,11 +145,11 @@ RLAgent::RLAgent():
     this->current_reward = 0;
 
     this->actor_gradient_size = GPU::mem_needed_align(
-            sizeof(float) * (64*64 + 64*3 + 64 + 3), sizeof(float) * 4
+            sizeof(float) * (64*64 + 64*AGENT_NUM_ACTIONS + 64 + AGENT_NUM_ACTIONS), sizeof(float) * 4
             );
 
     this->critic_gradient_size = GPU::mem_needed_align(
-            sizeof(float) * (64*64 + 64*1 + 64 + 3), sizeof(float) * 4
+            sizeof(float) * (64*64 + 64*1 + 64 + 1), sizeof(float) * 4
             );
 
     this->cnn_gradient_size = GPU::mem_needed_align(
@@ -158,7 +158,7 @@ RLAgent::RLAgent():
             );
 
     this->activations_total = GPU::mem_needed_align(
-            64 + 3 +
+            64 + AGENT_NUM_ACTIONS +
             64 + 1 +
             11 * 11 * 16 + 
             8 * 8 * 32 +
@@ -167,8 +167,8 @@ RLAgent::RLAgent():
             sizeof(float) * 4 // Alignment to 128 bits
             );
 
-    this->grad_with_out = this->cnn_gradient_size = GPU::mem_needed_align(
-            3 + 64 +
+    this->grad_with_out = GPU::mem_needed_align(
+            AGENT_NUM_ACTIONS + 64 +
             1 + 64 + 
             64 + 2*2*32 + 4*4*32 + 8*8*32 + 11*11*16,
             //dense layer + conv layers
@@ -352,7 +352,7 @@ RLAgent::RLAgent():
     cuda_b_offset += actor_biases;
 
     //CPU MEM
-    float* cpu_final_pp = new (std::nothrow) float[3];
+    float* cpu_final_pp = new (std::nothrow) float[AGENT_NUM_ACTIONS];
 
     if (!cpu_final_pp) {
         std::cerr << "RLAgent::RLAgent() | Failed to allocate memory on the cpu!" << std::endl;
@@ -440,7 +440,7 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     float* cuda_out = out;
 
     GPU::Tensor input = GPU::Tensor { cuda_inp, CNN_L1_IN, CNN_L1_IN, CNN_L1_IN_DEPTH };
-    GPU::Tensor output = GPU::Tensor { cuda_out, CNN_L1_OUT, CNN_L1_OUT, CNN_L2_OUT_DEPTH };
+    GPU::Tensor output = GPU::Tensor { cuda_out, CNN_L1_OUT, CNN_L1_OUT, CNN_L1_OUT_DEPTH };
 
     //go with nullptr just to verify something :)
     //the 'b' tensor is useless since its represented by the filters themself
@@ -457,6 +457,9 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     input.dat_x = CNN_L1_OUT;
     input.dat_y = CNN_L1_OUT;
     input.dat_z = CNN_L1_OUT_DEPTH;
+    output.dat_x = CNN_L2_OUT;
+    output.dat_y = CNN_L2_OUT;
+    output.dat_z = CNN_L2_OUT_DEPTH;
     output.dat_pointer += CNN_L1_OUT*CNN_L1_OUT*CNN_L1_OUT_DEPTH;
 
     //update input and output tensors with their respective #define thingy constant ?
@@ -485,7 +488,7 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     input.dat_pointer += CNN_L2_OUT*CNN_L2_OUT*CNN_L2_OUT_DEPTH;
     output.dat_x = CNN_L4_OUT;
     output.dat_y = CNN_L4_OUT;
-    output.dat_z = CNN_L3_OUT_DEPTH;
+    output.dat_z = CNN_L4_OUT_DEPTH;
     output.dat_pointer += CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH;
 
     l4_4x4_32x3x3.convolve(input, GPU::Tensor {
@@ -497,11 +500,11 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     input.dat_pointer += CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH;
     output.dat_x = CNN_L5_OUT;
     output.dat_y = CNN_L5_OUT;
-    output.dat_z = CNN_L4_OUT_DEPTH;
+    output.dat_z = CNN_L5_OUT_DEPTH;
     output.dat_pointer += CNN_L4_OUT*CNN_L4_OUT*CNN_L4_OUT_DEPTH;
 
     //I know a bug is somewhere over here I defo fucked up
-    l5_2x2x32_64.passthrough(input.dat_pointer, input.dat_pointer, stream);
+    l5_2x2x32_64.passthrough(input.dat_pointer, output.dat_pointer, stream);
 }
 
 ////////////////////////////////////////////////////////
@@ -529,6 +532,30 @@ void Critic::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b) {
             l2_neurons, l2_input, GPU::ActivationFunction::ReLU, GPU::ActivationFunction::DerReLU);
 
 }
+
+void Critic::value(float* cnn_processed, float* out, cudaStream_t stream) {
+
+    float* cuda_inp = cnn_processed;
+    float* cuda_out = out;
+
+    GPU::Tensor input = GPU::Tensor { cuda_inp, CRITIC_L1_IN, CRITIC_L1_IN, CRITIC_L1_IN_DEPTH };
+    GPU::Tensor output = GPU::Tensor { cuda_out, CRITIC_L1_OUT, CRITIC_L1_OUT, CRITIC_L1_OUT_DEPTH };
+
+    l1_64_64.passthrough(input.dat_pointer, output.dat_pointer, stream);
+
+    input.dat_x = CRITIC_L1_OUT;
+    input.dat_y = CRITIC_L1_OUT;
+    input.dat_z = CRITIC_L1_OUT_DEPTH;
+    input.dat_pointer = output.dat_pointer;
+    output.dat_x = CRITIC_L2_OUT;
+    output.dat_y = CRITIC_L2_OUT;
+    output.dat_z = CRITIC_L2_OUT_DEPTH;
+    output.dat_pointer += CRITIC_L1_OUT*CRITIC_L1_OUT*CRITIC_L1_OUT_DEPTH;
+
+    l2_64_1.passthrough(input.dat_pointer, output.dat_pointer, stream);
+
+}
+
 ////////////////////////////////////////////////////////
 ////////////////////ACTOR CODE//////////////////////////
 ////////////////////////////////////////////////////////
@@ -541,7 +568,7 @@ void Actor::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b) {
     size_t l1_neurons = 64;
     size_t l1_input = 64;
 
-    size_t l2_neurons = 3;
+    size_t l2_neurons = AGENT_NUM_ACTIONS;
     size_t l2_input = 64;
 
     l1_64_64.init_self(gpu, cuda_w + weights_offset, cuda_b + biases_offset, 
@@ -550,7 +577,30 @@ void Actor::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b) {
     weights_offset += l1_input * l1_neurons;
     biases_offset += l1_neurons;
 
-    l2_64_3.init_self(gpu, cuda_w + weights_offset, cuda_b + biases_offset, 
+    l2_64_4.init_self(gpu, cuda_w + weights_offset, cuda_b + biases_offset, 
             l2_neurons, l2_input, GPU::ActivationFunction::ReLU, GPU::ActivationFunction::DerReLU);
 
 }
+
+void Actor::act(float* cnn_processed, float* out, cudaStream_t stream) {
+
+    float* cuda_inp = cnn_processed;
+    float* cuda_out = out;
+
+    GPU::Tensor input = GPU::Tensor { cuda_inp, ACTOR_L1_IN, ACTOR_L1_IN, ACTOR_L1_IN_DEPTH };
+    GPU::Tensor output = GPU::Tensor { cuda_out, ACTOR_L1_OUT, ACTOR_L1_OUT, ACTOR_L1_OUT_DEPTH };
+
+    l1_64_64.passthrough(input.dat_pointer, output.dat_pointer, stream);
+
+    input.dat_x = ACTOR_L1_OUT;
+    input.dat_y = ACTOR_L1_OUT;
+    input.dat_z = ACTOR_L1_OUT_DEPTH;
+    input.dat_pointer = output.dat_pointer;
+    output.dat_x = ACTOR_L2_OUT;
+    output.dat_y = ACTOR_L2_OUT;
+    output.dat_z = ACTOR_L2_OUT_DEPTH;
+    output.dat_pointer += ACTOR_L1_OUT*ACTOR_L1_OUT*ACTOR_L1_OUT_DEPTH;
+
+    l2_64_4.passthrough(input.dat_pointer, output.dat_pointer, stream);
+}
+

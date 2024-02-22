@@ -23,6 +23,8 @@
     #define RLAGENT_GAMMA 0.9f
 #endif
 
+#define AGENT_NUM_ACTIONS 3
+
 const size_t CNN_L1_IN = 13;
 const size_t CNN_L1_OUT = 11;
 const size_t CNN_L1_IN_DEPTH = 1;
@@ -60,13 +62,13 @@ const size_t CRITIC_L2_OUT_DEPTH = 1;
 //----------------================----------------
 const size_t ACTOR_L1_IN = 64;
 const size_t ACTOR_L1_OUT = 64;
-const size_t ACTOR_L1_I_DEPTHN = CNN_L5_OUT_DEPTH;
+const size_t ACTOR_L1_IN_DEPTH = CNN_L5_OUT_DEPTH;
 const size_t ACTOR_L1_OUT_DEPTH = 1;
 
 const size_t ACTOR_L2_IN = 64;
-const size_t ACTOR_L2_OUT = 3;
+const size_t ACTOR_L2_OUT = AGENT_NUM_ACTIONS;
 const size_t ACTOR_L2_IN_DEPTH = ACTOR_L1_OUT_DEPTH;
-const size_t ACTOR_L2_OUT_DEPTH = 3;
+const size_t ACTOR_L2_OUT_DEPTH = 1;
 
 #include <cstdint>
 
@@ -76,7 +78,7 @@ private:
     //Possible outputs => 3
     //do softmax on CPU
     DenseLayer l1_64_64;
-    DenseLayer l2_64_3;
+    DenseLayer l2_64_4;
 
     size_t gradient_size;
     size_t input_size;
@@ -84,7 +86,7 @@ private:
 
 public:
 
-    void act(uint32_t* cnn_processed, float* out);
+    void act(float* cnn_processed, float* out, cudaStream_t stream);
 
     Actor();
     ~Actor();
@@ -116,7 +118,7 @@ private:
 
 public:
 
-    void value(float* cnn_processed, float* out);
+    void value(float* cnn_processed, float* out, cudaStream_t stream);
 
     Critic();
     ~Critic();
