@@ -302,12 +302,14 @@ void conv_ReLU2(float* k, float* a, float* out, int k_size,
                     int k_idx = n*k_size*k_size + i*k_size + j;
                     int i_idx = n*a_size*a_size + y*a_size + i*a_size + x + j;
 
+                    //printf("k: %f a: %f | %d %d | %d %d\n", k[k_idx], a[i_idx], k_idx, i_idx, x, y);
                     sum += k[k_idx] * a[i_idx];
 
                 }
             }
         }
 
-        out[id_y * out_size + x] = (sum > 0) ? sum : 0.0;
+        //printf("x: %d y: %d | o_x: %d o_y: %d | out: %d| n: %f\n", x, y, id_x, id_y, y * out_size + x, sum);
+        out[y * out_size + x] = (sum > 0) ? sum : 0.0;
     }
 }

@@ -10,6 +10,7 @@ namespace GPU {
 
 float* align_mem(float* ptr, const uint32_t bytes, const uint32_t align);
 size_t mem_needed_align(const uint32_t bytes, const uint32_t align);
+int print_mem(float* p, size_t elms);
 
 enum ActivationFunction {
     ReLU = 0,
@@ -60,6 +61,9 @@ public:
 
     //calls cuda_device_synchronize, yeah
     void device_sync();
+
+    //prints memory IN ORDER from the gpu to validate, that's all really
+    int print_mem(float* p, size_t elms);
 
 	static std::pair<size_t, size_t> calculate_new_mat_dims(size_t a_col, size_t a_row, size_t b_col, size_t b_row) noexcept;
 
@@ -224,3 +228,6 @@ public:
 };
 
 }
+
+
+static GPU::Device DummyDevice(0);

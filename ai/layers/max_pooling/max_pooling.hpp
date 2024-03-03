@@ -12,14 +12,16 @@ private:
 
     int* cuda_idx;
 
-    GPU::Device& gpu;
+    GPU::Device& gpu = DummyDevice;
 
 public:
 
     void init_self(GPU::Device& gpu, int pool_size, uint32_t n_inputs, uint32_t in_size);
 
+    MaxPooling();
+
     MaxPooling(GPU::Device& gpu, int pool_size, uint32_t n_inputs, uint32_t in_size);
-    ~MaxPooling();
+    ~MaxPooling() = default;
     MaxPooling(MaxPooling& other) = default;
     MaxPooling(MaxPooling&& other);
 

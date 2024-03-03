@@ -22,6 +22,7 @@ static NumberOffsetPair nocheck_strtouint32t(const char* c) noexcept {
     uint32_t n = 0;
     uint32_t i = 0;
 
+
     if (*c == '+') {
         ++i;
     }
@@ -67,8 +68,8 @@ static void log_error(const char* t) noexcept {
     exit(-1);
 }
 
-std::unique_ptr<float*> TileMapData::load_data(
-        FILE* fs, std::unique_ptr<float*> out, uint32_t dat_size) noexcept {
+float* TileMapData::load_data(
+        FILE* fs, float* out, uint32_t dat_size) noexcept {
 
     for (int i = 0; i < dat_size; ++i) {
 
@@ -78,7 +79,7 @@ std::unique_ptr<float*> TileMapData::load_data(
 
         //just a whole number :)
         if (fgetc(fs) != '.') {
-            (*out)[i] = x;
+            out[i] = x;
             continue;
         }
 
@@ -99,10 +100,10 @@ std::unique_ptr<float*> TileMapData::load_data(
             x += powf(10, -j) * (c - '0');
         }
 
-        (*out)[i] = x;
+        out[i] = x;
     }
 
-    return std::move(out);
+    return out;
 }
 
 TileMapData::TileMapData(const char* path) {
@@ -138,14 +139,14 @@ TileMapData::TileMapData(const char* path) {
         exit(-1);
     }
 
-    this->dat = std::make_unique<float *>(_dat);
+    this->dat = _dat;
     this->dat_size = dat_size;
     this->tiles_y = tiles_y;
     this->tiles_x = tiles_x;
     this->world = world;
     this->level = level;
 
-    this->dat = TileMapData::load_data(fs, std::move(this->dat), this->dat_size);
+    this->dat = TileMapData::load_data(fs, this->dat, this->dat_size);
 
     //TO BE CONTINUED
     //puk = pandos = rat = trash panda = big rat ??? 

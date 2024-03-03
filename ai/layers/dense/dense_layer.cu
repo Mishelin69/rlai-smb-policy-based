@@ -2,6 +2,11 @@
 #include <cuda_runtime_api.h>
 #include <iostream>
 
+DenseLayer::DenseLayer():
+    gpu(DummyDevice) {
+
+}
+
 DenseLayer::DenseLayer(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
         const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func)
     : gpu(gpu), input_shape(input), neurons(neurons), actv_func(actv_func), der_actv_func(der_actv_func) {
@@ -59,29 +64,47 @@ void DenseLayer::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b, const
         std::cerr << "DenseLayer::DenseLayer() | Error: Error in initializing biases!!" << std::endl; 
     }
 
+    this->cudaMat = cudaMat;
+    this->cudaBias = cudaBias;
 
 }
 
 
 void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) const noexcept {
 
-    std::pair<size_t, size_t> out_shape = GPU::Device::calculate_new_mat_dims(mat_x, mat_y, input_shape, input_shape); 
+    std::pair<size_t, size_t> out_shape = GPU::Device::calculate_new_mat_dims(input_shape, 1, mat_y, mat_x); 
 
     size_t out_y = out_shape.first;
     size_t out_x = out_shape.second;
 
+    //std::cout << "INP: " << input_shape << " " << 1 << std::endl;
+    //std::cout << "MAT: " << mat_x << " " << mat_y << std::endl;
+    //std::cout << "OUT: " << out_x << " " << out_y << std::endl;
+
+    if (!a || !out) {
+        std::cerr << "DenseLayer::passthrough | NULL POINTER!!" << std::endl;
+        exit(-1);
+    }
+
+    if (!cudaMat || !cudaBias) {
+        std::cerr << "DenseLayer::passthrough | NULL POINTER!! (w/b)" << std::endl;
+        exit(-1);
+    }
+
+    //std::cout << "OUTPUT Y: " << out_y << " OUTPUT X: " << out_x << std::endl;
+
     gpu.matmul_ver1_gpu(
-            this->cudaMat,
             a,
+            this->cudaMat,
             out,
+            this->input_shape,
+            1,
             this->mat_y,
             this->mat_x,
-            1,
-            this->input_shape,
             out_y,
             out_x,
             this->actv_func,
-            this->stream
+            stream
             );
 
     gpu.matadd_ver1(
@@ -90,14 +113,15 @@ void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) co
             out,
             this->biases,
             1,
-            biases,
+            this->biases,
             1,
-            out_y, //this should match but worst scenario I get an error :chomik_xmas:
+            out_y, //this should match but worst scenario I get an error :chomik_xmas: yaaah indeed was incorrect
             1,
-            this->stream
+            stream
             );
 
     cudaStreamSynchronize(stream);
+    //exit(-1);
 }
 
 //fix this to do the correct thing :(

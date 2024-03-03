@@ -1,0 +1,1 @@
+compute-sanitizer --tool memcheck a.exe

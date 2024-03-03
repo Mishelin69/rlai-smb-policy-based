@@ -34,7 +34,7 @@ private:
     uint32_t kernel_x;
     uint32_t kernel_y;
 
-    GPU::Device& gpu;
+    GPU::Device& gpu = DummyDevice;
     GPU::ActivationFunction actv_func;
 
 public:
@@ -46,6 +46,7 @@ public:
             const uint32_t input_chanels, const uint32_t kernel_dim, 
             const uint32_t input, float* cuda_w, float* cuda_b);
 
+    ConvolutionalLayer();
 
     ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction func,
             const uint32_t feature_maps, 
@@ -56,7 +57,7 @@ public:
     ~ConvolutionalLayer() = default;
 
     ConvolutionalLayer(ConvolutionalLayer& other) = default;
-    ConvolutionalLayer(const ConvolutionalLayer& other) = default;
+    //ConvolutionalLayer(const ConvolutionalLayer& other) = default;
 
     static std::pair<uint32_t, uint32_t> calc_output_size(
             const uint32_t kernel_x, const uint32_t kernel_y,

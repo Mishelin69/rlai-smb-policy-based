@@ -1,72 +1,106 @@
-#include "../ai/allocator/allocator.hpp"
-#include "cuda_runtime_api.h"
+#include "../ai/network.hpp"
+
 #include <iostream>
 
-int main(int argv, char** argc) {
+#include "../external/json/include/nlohmann/json.hpp"
+#include "../external/cpp-httplib/httplib.h"
 
-    GPU::Device gpu;
-    Allocator alloc(gpu, 32);
+using json = nlohmann::json;
+RLAgent agent;
 
-    const size_t matrix_dim = 2;
-    const size_t matrix_size = matrix_dim * matrix_dim;
+struct FrameInput {
 
-    const size_t kernel_dim = 1;
-    const size_t kernel_size = kernel_dim * kernel_dim;
+    long int mario_x;
+    long int mario_y;
+    long int n_enemies;
+    long int timer; 
+    long int e1_x; 
+    long int e1_y;
+    long int e2_x; 
+    long int e2_y;
+    long int e3_x; 
+    long int e3_y;
+    long int e4_x; 
+    long int e4_y;
+    long int e5_x; 
+    long int e5_y;
+    long int is_alive;
+};
 
-    const size_t out_dim = GPU::Device::calculate_conv_dims(kernel_dim, matrix_dim);
-    const size_t out_size = out_dim*out_dim;
+void set_cors_headers(httplib::Response &res) {
+    res.set_header("Access-Control-Allow-Origin", "*");
+    res.set_header("Access-Control-Allow-Headers", "Content-Type");
+    res.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    // Include any other headers as needed
+}
 
-    std::cout << "out size = " << out_dim << std::endl;
+void handle_options(const httplib::Request &req, httplib::Response &res) {
+    set_cors_headers(res);
+    res.status = 204; // No Content
+}
 
-    const size_t block_size = matrix_size + kernel_size + out_size;
-    int block_res = alloc.alloc_new_block(block_size * 3);
+void handle_post(const httplib::Request &req, httplib::Response &res) {
 
-    if (block_res != 0) {
-        std::cerr << "allocating memory failed!" << std::endl;
-        exit(-1);
-    }
+    set_cors_headers(res); // Set CORS headers for the POST response
 
-    float* cudaMat = alloc.alloc_space(matrix_size * 3);
-    float* cudaKernel = alloc.alloc_space(kernel_size * 3);
-    float* cudaOut = alloc.alloc_space(out_size * 3);
+    // Parse the request body as JSON
+    auto j = json::parse(req.body);
 
-    std::cout << "Out size: " << out_dim << std::endl;
+    FrameInput input;
 
-    float mat_dat[matrix_size * 3] = {
-        1, 2, 
-        3, 4, 
-        5, 6, 
-        7, 8, 
-        9, 10, 
-        11, 12,
-    };
+    // Extract data from the JSON object
+    input.mario_x = j["mario_x"].get<long int>();
+    input.mario_y = j["mario_y"].get<long int>();
+    input.n_enemies = j["n_enemies"].get<long int>();
+    input.timer = j["timer"].get<long int>();
+    input.e1_x = j["e1_x"].get<long int>();
+    input.e1_y = j["e1_y"].get<long int>();
+    input.e2_y = j["e2_y"].get<long int>();
+    input.e2_y = j["e2_y"].get<long int>();
+    input.e3_y = j["e3_y"].get<long int>();
+    input.e3_y = j["e3_y"].get<long int>();
+    input.e4_y = j["e4_y"].get<long int>();
+    input.e4_y = j["e4_y"].get<long int>();
+    input.e5_y = j["e5_y"].get<long int>();
+    input.e5_y = j["e5_y"].get<long int>();
+    input.is_alive = j["is_alive"].get<long int>();
 
-    float kernel_dat[kernel_size * 3] = {1, 2, 3};
-    float out_dat[3];
+    uint64_t prediction = agent.predict(
+            input.mario_x,
+            input.mario_y,
+            input.n_enemies,
+            input.timer,
+            input.e1_x,
+            input.e1_y,
+            input.e2_x,
+            input.e2_y,
+            input.e3_x,
+            input.e3_y,
+            input.e4_x,
+            input.e4_y,
+            input.e5_x,
+            input.e5_y,
+            input.is_alive       
+        );
 
-    gpu.memcpy_host(mat_dat, cudaMat, sizeof(float) * matrix_size * 3); 
-    gpu.memcpy_host(kernel_dat, cudaKernel, sizeof(float) * kernel_size * 3); 
 
-    gpu.batched_conv_ver1(cudaKernel, cudaMat, cudaOut, kernel_dim, matrix_dim, 2, 
-            GPU::ActivationFunction::ReLU, 3, 4, 3, 0);
+    // Create a response JSON object
+    json response_json;
+    response_json["action"] = prediction;
 
-    gpu.device_sync();
-    gpu.memcpy_device(cudaOut, out_dat, sizeof(float) * out_size * 3);
+    // Send the response JSON as a string
+    res.set_content(response_json.dump(), "application/json");
+}
 
-    const cudaError_t last_error = cudaGetLastError();
+int main(void) {
+    httplib::Server svr;
 
-    if (last_error != 0) {
-        const char* error_name = cudaGetErrorName(last_error);
-        const char* error_str = cudaGetErrorString(last_error);
+    svr.Get("/", [](const httplib::Request&, httplib::Response &res) {
+            res.set_content("Hello, World!", "text/plain");
+            });
 
-        std::cout << "Error Name: " << error_name << "\nError desc: " << error_str << std::endl;
-    } else {
-        std::cout << "No error, nice! D: kringe" << std::endl;
-    }
+    svr.Post("/post", handle_post);
+    svr.Options("/post", handle_options); // Handle pre-flight requests for the POST endpoint
 
-    for (int i = 0; i < out_size * 3; ++i) {
-        std::cout << "Elm " << i << ". => " << out_dat[i] << std::endl;
-    }
-
-    return 0;
+    svr.listen("localhost", 3002);
 }

@@ -35,7 +35,7 @@ int Allocator::alloc_new_block(const size_t bytes) {
 
     if (mem_to_alloc % alignment != 0) {
         const size_t upper = (size_t) std::ceil(mem_to_alloc / alignment);
-        mem_to_alloc = sizeof(float) * upper;
+        mem_to_alloc = alignment * upper;
         extra = mem_to_alloc - bytes;
     }
 
@@ -45,6 +45,8 @@ int Allocator::alloc_new_block(const size_t bytes) {
         std::cerr << "Couln't allocate memory on the gpu!" << std::endl;
         return -1;
     }
+
+    std::cout << "Allocated block size of: " << mem_to_alloc << std::endl;
 
     this->blocks.push_back( AllocatorBlock { cuda_p, bytes, blocks.size(), bytes, extra } );
 
@@ -60,13 +62,15 @@ float* Allocator::alloc_space(const size_t bytes) {
 
     if (mem_to_alloc % alignment != 0) {
         const size_t upper = (size_t) std::ceil(mem_to_alloc / alignment);
-        mem_to_alloc = sizeof(float) * upper;
+        mem_to_alloc = alignment * upper;
         extra = mem_to_alloc - bytes;
     }
 
     for (auto& b : blocks) {
 
         if (b.block_free < mem_to_alloc) {
+
+            std::cout << "Free space: " << b.block_free << " |Requested: " << mem_to_alloc << std::endl;
 
             block_id += 1;
             continue;

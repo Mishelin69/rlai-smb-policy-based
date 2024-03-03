@@ -11,7 +11,7 @@ class TileMapData {
 
 public: 
 
-    std::unique_ptr<float*> dat;
+    float* dat;
     uint32_t dat_size;
 
     uint32_t tiles_x;
@@ -22,13 +22,13 @@ public:
 
 private: 
 
-    static std::unique_ptr<float*> load_data(
-            FILE* fs, std::unique_ptr<float*> out, uint32_t dat_size) noexcept;
+    static float* load_data(
+            FILE* fs, float* out, uint32_t dat_size) noexcept;
 
 public:
 
     TileMapData(const char* path);
     ~TileMapData() = default;
-    TileMapData(TileMapData& other) = delete;
+    TileMapData(TileMapData& other) = default;
 
 };

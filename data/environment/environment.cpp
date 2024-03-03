@@ -24,7 +24,7 @@ void Environment::set_value_in_stage(const Vector2 v, const float value) {
     const uint32_t tiles_x = stage.tiles_x;
     const uint32_t tiles_y = stage.tiles_y;
 
-    float* dat_ptr = *(stage.dat.get());
+    float* dat_ptr = stage.dat;
     dat_ptr[tiles_x * (int)v.y + (int)v.x] = value;
 }
 
@@ -75,13 +75,19 @@ Environment::Environment(const char* path_to_tile_data, GPU::Device& gpu, float*
         for (const auto& e : fs::directory_iterator(path)) {
 
             //Ugh so awful and ugly
+            //std::cout << "kttypower" << std::endl;
+
+            std::cout << "PATH: " << e << std::endl;
+
             const wchar_t* wide_path = e.path().c_str();
             std::wstring wstr(wide_path);
             std::string wstr_to_str(wstr.begin(), wstr.end());
             const char* path = wstr_to_str.c_str();
 
             this->stages.push_back(TileMapData(path));
+            //std::cout << " ImSkirby" << std::endl;
         }
+
 
         for (size_t i = 0; i < MAX_ENEMIES_ON_SCREEN; ++i) {
             enemy_pos[i] = Vector2_ZERO;
@@ -96,14 +102,54 @@ Environment::Environment(const char* path_to_tile_data, GPU::Device& gpu, float*
         this->current_mirror = 1;
     }
 
+uint32_t snap_to_closest_x(uint32_t x) {
+    return x / 16; //yes integer division and yes no snapping for now :(
+}
+
+uint32_t snap_to_closest_y(uint32_t x) {
+    return ceilf(x / 16.0); //yes integer division and yes no snapping for now :(
+}
+
 void Environment::update_frame(
-        const uint32_t mario_x, const uint32_t mario_y,
-        const uint32_t n_enemies, const uint32_t timer, 
-        const uint32_t e1_x, const uint32_t e1_y,
-        const uint32_t e2_x, const uint32_t e2_y,
-        const uint32_t e3_x, const uint32_t e3_y,
-        const uint32_t e4_x, const uint32_t e4_y,
-        const uint32_t e5_x, const uint32_t e5_y) {
+        uint32_t mario_x, uint32_t mario_y,
+        uint32_t n_enemies, uint32_t timer, 
+        uint32_t e1_x, uint32_t e1_y,
+        uint32_t e2_x, uint32_t e2_y,
+        uint32_t e3_x, uint32_t e3_y,
+        uint32_t e4_x, uint32_t e4_y,
+        uint32_t e5_x, uint32_t e5_y) {
+
+    size_t max_lvl_y = stages[current_stage].tiles_y;
+
+    //std::cout << "Before change: " << mario_y << std::endl;
+    mario_x = snap_to_closest_x(mario_x) + 2;
+    mario_y = static_cast<int>(snap_to_closest_y(mario_y)) + 1;
+
+    e1_x = snap_to_closest_x(e1_x) + 2;
+    e1_y = static_cast<int>(snap_to_closest_y(e1_y));
+
+    e2_x = snap_to_closest_x(e2_x) + 2;
+    e2_y = static_cast<int>(snap_to_closest_y(e2_y));
+
+    e3_x = snap_to_closest_x(e3_x) + 2;
+    e3_y = static_cast<int>(snap_to_closest_y(e3_y));
+
+    e4_x = snap_to_closest_x(e4_x) + 2;
+    e4_y = static_cast<int>(snap_to_closest_y(e4_y));
+
+    e5_x = snap_to_closest_x(e5_x) + 2;
+    e5_y = static_cast<int>(snap_to_closest_y(e5_y));
+
+
+    if (mario_x > this->stages[this->current_stage].tiles_x || 
+            mario_y > this->stages[this->current_stage].tiles_y) {
+
+        std::cerr << "Environment::update_frame | Invalid Mario position!!" << std::endl;
+        exit(-1);
+    }
+
+    //std::cout << "level_y: " << stages[current_stage].tiles_y << std::endl;
+    //std::cout << "Mario_y: " << mario_y << std::endl;
 
     //set current frame data as old and then update it
     this->mirror_current();
@@ -203,43 +249,73 @@ void Environment::mirror_current() {
 void Environment::mirror() {
 
     uint32_t last = this->index_last_frame();
-    uint32_t current = last ^ 1;
-    
+    uint32_t current = 0;
+
     //copy the current 13x13 relative to player
     //13*13 => mario is in the "middle"
     //two to the left of mario and 10 in front
     //two below and ten above
 
+    //std::cout << "Player x: " << this->player_pos.x << " y: " << player_pos.y << std::endl;
     const uint32_t top_left_x = this->player_pos.x - 2;
     const uint32_t top_left_y = this->player_pos.y - 10;
 
+    std::cout << "Top left x: " << top_left_x << " Top left y: " << top_left_y << std::endl;
+
     const TileMapData& stage = this->stages[this->current_stage];
-    float* dat_ptr = *(stage.dat.get());
+    float* dat_ptr = stage.dat;
+
     const uint32_t tiles_x = stage.tiles_x;
+
+    //HANDLE PLAYER TOP LEFT OVERFLOW BY ADDING 0 TO IT 
+    //OR GOING DOWN BUT PROB ADDING 0 BETTER
 
     for (size_t i = 0; i < MAP_DIM; ++i) {
 
         const uint32_t y = top_left_y + i;
         for (size_t j = 0; j < MAP_DIM; ++j) {
-            this->map_mirror[current*MAP_DIM*i + j] = dat_ptr[y * tiles_x + j];
+            //std::cout << " " << dat_ptr[y * tiles_x + j] << "\t";
+            this->map_mirror[current*MAP_DIM + MAP_DIM*i + j] = dat_ptr[y * tiles_x + j];
         }
+
+        //std::cout << std::endl;
     }
-    
+
+    //exit(-1);
+
     this->upload_to_gpu();
 }
 
 void Environment::upload_to_gpu() {
 
-    const uint32_t cur_frame = this->index_last_frame() ^ 1;
+    const uint32_t cur_frame = 0;
 
+    /*
+    for (size_t i = 0; i < 13; ++i) {
+        for (size_t j = 0; j < 13; ++j) {
+           
+            size_t index = cur_frame * MAP_SIZE + 13*i + j;
+            std::cout << " " << this->map_mirror[index];
+        }
+
+        std::cout << "" << std::endl;
+    }
+    */
+
+    //std::cout << "========================================" << std::endl;
     gpu.memcpy_host(
             this->map_mirror.data() + cur_frame * MAP_SIZE,
-            GPU::align_mem(this->cuda_env, 
-                 sizeof(float) * MAP_SIZE * current_frame, 
-                sizeof(float) * 4),
+            this->cuda_env + this->rindex*MAP_SIZE,
+            sizeof(float) * MAP_SIZE
+            );
+
+    /*
+    gpu.print_mem(
+            this->cuda_env + this->rindex*MAP_SIZE,
             MAP_SIZE
-        );
-    
+            );
+            */
+
     this->current_frame += 1;
 }
 
@@ -248,11 +324,12 @@ void Environment::player_died() {
 }
 
 void Environment::compute_reward() {
-    
+
     float v = this->player_pos.x - this->last_frame_player_pos.x;
     float c = this->last_timer - this->timer;
     float d = (this->player_dead) ? -15.0f : 0.f;
 
+    //THIS ACCESS CAUSES CRASHES ???? WHY THO? ?? IDK
     this->rewards[this->rindex] = v + c + d;
     this->rindex += 1;
     this->player_dead = false;

@@ -1,11 +1,12 @@
 #include "device_launch_parameters.h"
+#include <stdio.h>
 
 __global__
 void max_pooling_ver1(const float* a, float* out, size_t* out_idx, const size_t pool_size,
         const size_t input_dim, const size_t output_dim, const size_t z_dim) {
 
-    const uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (x < output_dim && y < z_dim * output_dim) {
 
@@ -38,20 +39,24 @@ void pool_ver2(const float* input, float* out, int* idx, int in_dim, int out_dim
 
     if (x < out_dim && y < out_dim) {
 
-        float max = input[y*in_dim*in_dim + x*pool_size];
-        int max_index = y*in_dim*in_dim + x*pool_size;
+        float max = input[y*in_dim*pool_size + x*pool_size];
+        int max_index = y*in_dim*pool_size + x*pool_size;
 
         for (int i = 0; i < pool_size; ++i) {
             for (int j = 0; j < pool_size; ++j) {
 
-                if (input[y*in_dim*in_dim + x*pool_size + i*in_dim + j] > max) {
+                int index = y*in_dim*pool_size + x*pool_size + i*in_dim + j;
+                //printf("%f < %f | %d < %d\n", input[index], input[max_index], index, max_index);
 
-                    max = input[y*in_dim*in_dim + x*pool_size + i*in_dim + j];
-                    max_index = y*in_dim*in_dim + x*pool_size + i*in_dim + j;
+                if (input[index] > max) {
+                    max = input[index];
+                    max_index = index;
                 }
             }
         }
 
+        //printf("idx: %d n: %f\n", y*out_dim + x, max);
+        //printf("x: %d y: %d | %p\n", x, y, input);
         out[y*out_dim + x] = max;
         idx[y*out_dim + x] = max_index;
     }

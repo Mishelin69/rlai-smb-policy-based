@@ -32,6 +32,8 @@ public:
             const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func);
     DenseLayer(DenseLayer& other) = default;
 
+    DenseLayer();
+
     //actually no problem since memory is on the gpu
     ~DenseLayer() = default;
 

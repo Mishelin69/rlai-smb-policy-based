@@ -1,6 +1,10 @@
 #include "../max_pooling/max_pooling.hpp"
 #include <iostream>
 
+MaxPooling::MaxPooling() {
+
+}
+
 MaxPooling::MaxPooling(GPU::Device& gpu, int pool_size, uint32_t n_inputs, uint32_t in_size):
     gpu(gpu), n_inputs(n_inputs), in_size(in_size), pool_size(pool_size) {
 
@@ -51,7 +55,9 @@ void MaxPooling::pool(GPU::Tensor in, GPU::Tensor out, cudaStream_t stream) {
 
         gpu.max_pool_ver2(in, out, cuda_idx, pool_size, stream);
 
-        in.dat_pointer = in.dat_pointer + i*in_size*in_size;
-        out.dat_pointer = out.dat_pointer + i*out_size*out_size;
+        in.dat_pointer = in.dat_pointer + in_size*in_size;
+        out.dat_pointer = out.dat_pointer + out_size*out_size;
     }
+
+    gpu.device_sync();
 }

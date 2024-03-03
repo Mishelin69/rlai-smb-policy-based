@@ -23,7 +23,7 @@
     #define RLAGENT_GAMMA 0.9f
 #endif
 
-#define AGENT_NUM_ACTIONS 3
+#define AGENT_NUM_ACTIONS 4
 
 const size_t CNN_L1_IN = 13;
 const size_t CNN_L1_OUT = 11;
@@ -69,6 +69,20 @@ const size_t ACTOR_L2_IN = 64;
 const size_t ACTOR_L2_OUT = AGENT_NUM_ACTIONS;
 const size_t ACTOR_L2_IN_DEPTH = ACTOR_L1_OUT_DEPTH;
 const size_t ACTOR_L2_OUT_DEPTH = 1;
+//----------------================----------------
+const size_t cnn_activations_footprint = 
+    CNN_L1_OUT*CNN_L1_OUT*CNN_L1_OUT_DEPTH + 
+    CNN_L2_OUT*CNN_L2_OUT*CNN_L2_OUT_DEPTH + 
+    CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH + 
+    CNN_L4_OUT*CNN_L4_OUT*CNN_L4_OUT_DEPTH + 
+    CNN_L5_OUT;
+
+const size_t critic_activations_footprint = 
+    CRITIC_L1_OUT + 
+    CRITIC_L2_OUT;
+const size_t actor_activations_footprint = 
+    ACTOR_L1_OUT + 
+    ACTOR_L2_OUT;
 
 #include <cstdint>
 
@@ -89,8 +103,8 @@ public:
     void act(float* cnn_processed, float* out, cudaStream_t stream);
 
     Actor();
-    ~Actor();
-    Actor(const Actor& other);
+    ~Actor() = default;
+    Actor(Actor& other) = default;
     Actor(const Actor&& other);
 
     //Accepts the summed/averaged surrogate function objective
@@ -121,7 +135,7 @@ public:
     void value(float* cnn_processed, float* out, cudaStream_t stream);
 
     Critic();
-    ~Critic();
+    ~Critic() = default;
     Critic(const Critic& other);
     Critic(const Critic&& other);
 
@@ -163,7 +177,7 @@ public:
     void pass(float* state, float* out, cudaStream_t stream);
 
     ConvNetwork();
-    ~ConvNetwork();
+    ~ConvNetwork() = default;
     ConvNetwork(ConvNetwork& other) = default;
     ConvNetwork(const ConvNetwork&& other);
 
@@ -267,7 +281,7 @@ class RLAgent {
     GPU::Device gpu = GPU::Device(0);
     //we align for 128(4 * 32) bits since thats the most GPU warps can mem access at a time
     Allocator alloc = Allocator(this->gpu, sizeof(float)*4); 
-    Environment env = Environment("../data/parse-mario-level-img/out", this->gpu, this->cuda_env);
+    Environment env = Environment("C:/Users/milos/Desktop/home/coding/github/rlai-smb-policy-based/data/parse-mario-level-img/out", this->gpu, this->cuda_env);
     ThreadPool::Pool pool = ThreadPool::Pool(CUDA_STREAMS);
 
     private:
@@ -286,6 +300,8 @@ class RLAgent {
     void calculate_return(float* returns);
 
     void learn();
+
+    void reset_activations();
 
     public:
 

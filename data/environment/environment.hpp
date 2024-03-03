@@ -97,7 +97,7 @@ private:
 public:
 
     Environment(const char* path_to_tile_data, GPU::Device& gpu, float* env);
-    ~Environment();
+    ~Environment() = default;
     Environment(Environment& other) = default;
 
     //This funcitons tries to get player as right as possible 
@@ -109,12 +109,12 @@ public:
     void player_died();
 
     void update_frame(
-            const uint32_t mario_x, const uint32_t mario_y,
-            const uint32_t n_enemies, const uint32_t timer, 
-            const uint32_t e1_x, const uint32_t e1_y,
-            const uint32_t e2_x, const uint32_t e2_y,
-            const uint32_t e3_x, const uint32_t e3_y,
-            const uint32_t e4_x, const uint32_t e4_y,
+            uint32_t mario_x, uint32_t mario_y,
+            uint32_t n_enemies, uint32_t timer, 
+            uint32_t e1_x, uint32_t e1_y,
+            uint32_t e2_x, uint32_t e2_y,
+            uint32_t e3_x, uint32_t e3_y,
+            uint32_t e4_x, uint32_t e4_y,
             const uint32_t e5_x, const uint32_t e5_y
             );
 

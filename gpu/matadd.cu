@@ -11,7 +11,7 @@ void matadd_v1(float* A, float* B, float* C,
 	const uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x < c_col && y < c_row) {
-		C[y * c_row + x] = A[y * c_row + x] + B[y * c_row + x];
+		C[y * c_col + x] = A[y * a_col + x] + B[y * b_col + x];
 	}
 }
 

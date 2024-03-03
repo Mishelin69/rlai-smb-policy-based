@@ -7,6 +7,33 @@
 #include <algorithm>
 #include <random>
 
+int GPU::print_mem(float* p, size_t elms) {
+
+    float* mem = new (std::nothrow) float[elms];
+
+    if (!mem) {
+        std::cerr << "GPU::Device::print_mem | Couldn't allocate cpu memory to print!" << std::endl;
+
+        return -1;
+    }
+
+    auto res = cudaMemcpy(mem, p, sizeof(float) * elms, cudaMemcpyDeviceToHost);
+
+    if (res != cudaSuccess) {
+        std::cerr << "GPU::Device::print_mem | Couldn't copy mem from GPU over to CPU!" << std::endl;
+
+        delete[] mem;
+        return -1;
+    }
+
+    for (size_t i = 0; i < elms; ++i) {
+        std::cout << "Element[" << i << "] = " << mem[i] << std::endl;
+    }
+
+    delete[] mem;
+    return 1;
+}
+
 float* GPU::align_mem(float* ptr, const uint32_t bytes, const uint32_t align) {
     //make sure the block size is divisible by align and if not then make it mathch that size
     size_t mem_to_alloc = bytes;
@@ -14,7 +41,7 @@ float* GPU::align_mem(float* ptr, const uint32_t bytes, const uint32_t align) {
 
     if (mem_to_alloc % align != 0) {
         const size_t upper = (size_t) std::ceil(mem_to_alloc / align);
-        mem_to_alloc = sizeof(float) * upper;
+        mem_to_alloc = align * upper;
         extra = mem_to_alloc - bytes;
     }
 
@@ -25,8 +52,8 @@ float* GPU::align_mem(float* ptr, const uint32_t bytes, const uint32_t align) {
 size_t GPU::mem_needed_align(const uint32_t bytes, const uint32_t align) {
 
     const uint32_t upper = (uint32_t) std::ceil(bytes / align);
-    const uint32_t mem_to_alloc = sizeof(float) * upper;
-    
+    const uint32_t mem_to_alloc = align * upper;
+
     return mem_to_alloc;
 }
 
@@ -83,12 +110,15 @@ GPU::Device::Device(uint64_t gpu_id, int threads):
 
         }
 
-        std::cout << "MPS: " << this->mps << std::endl;
-        std::cout << "threads: " << this->threads << std::endl;
-        std::cout << "maxThreadsPerBlock: " << this->max_threads << std::endl;
-        std::cout << "maxThreadsPerMP: " << this->threads_per_mp << std::endl;
-        std::cout << "maxBlocksPerMP: " << this->blocks_per_mp << std::endl;
-        std::cout << "eccEnabled: " << this->ecc << std::endl;
+        std::cout << "GPU CONSTRUCTOR ?? " << std::endl;
+        /*
+           std::cout << "MPS: " << this->mps << std::endl;
+           std::cout << "threads: " << this->threads << std::endl;
+           std::cout << "maxThreadsPerBlock: " << this->max_threads << std::endl;
+           std::cout << "maxThreadsPerMP: " << this->threads_per_mp << std::endl;
+           std::cout << "maxBlocksPerMP: " << this->blocks_per_mp << std::endl;
+           std::cout << "eccEnabled: " << this->ecc << std::endl;
+         */
 
     }
 
@@ -108,6 +138,39 @@ GPU::Device::~Device() {
 
 void GPU::Device::device_sync() {
     cudaDeviceSynchronize();
+}
+
+int GPU::Device::print_mem(float* p, size_t elms) {
+
+    if (!validate_pointer(p, elms)) {
+        std::cerr << "GPU::Device::print_mem | Either invalid pointer/size!" << std::endl;
+
+        return -1;
+    }
+
+    float* mem = new (std::nothrow) float[elms];
+
+    if (!mem) {
+        std::cerr << "GPU::Device::print_mem | Couldn't allocate cpu memory to print!" << std::endl;
+
+        return -1;
+    }
+
+    auto res = memcpy_device(p, mem, sizeof(float) * elms);
+
+    if (res != cudaSuccess) {
+        std::cerr << "GPU::Device::print_mem | Couldn't copy mem from GPU over to CPU!" << std::endl;
+
+        delete[] mem;
+        return -1;
+    }
+
+    for (size_t i = 0; i < elms; ++i) {
+        std::cout << "Element[" << i << "] = " << mem[i] << std::endl;
+    }
+
+    delete[] mem;
+    return 1;
 }
 
 int GPU::Device::get_mps() const noexcept {
@@ -206,7 +269,11 @@ int GPU::Device::memcpy_device(float* src, float* dst, size_t size) noexcept {
     cudaError_t res = cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost);
 
     if (res != cudaSuccess) {
-        std::cerr << "Error while copying data from host to device!" << std::endl;
+        /*
+           std::cerr << "Accessing: " << src << std::endl;
+           std::cerr << "Memcpy error: " << cudaGetErrorString(res) << std::endl;
+           std::cerr << "Error while copying data from host to device!" << std::endl;
+         */
         return res;
     }
 
@@ -283,6 +350,7 @@ int GPU::Device::memset(float* p, int value, const size_t n_elems) noexcept {
         return res;
     }
 
+    device_sync();
     return cudaSuccess;
 }
 
@@ -291,6 +359,7 @@ int GPU::Device::memset(float* p, int value, const size_t n_elems) noexcept {
 int GPU::Device::random_numbers(float* p, const size_t n_elems) noexcept {
 
     if (!validate_pointer(p, n_elems)) {
+        std::cerr << "GPU::Device::random_numbers | Pointer not valid!" << std::endl;
         return -1;
     }
 
@@ -308,11 +377,12 @@ int GPU::Device::random_numbers(float* p, const size_t n_elems) noexcept {
     std::random_device rd;
     std::mt19937 gen(rd()); 
 
-    std::uniform_real_distribution<float> dist(0.0, 1.0);
+    std::uniform_real_distribution<float> dist(-1.0, 1.0);
 
     //fill in values hopefully not repeating D:
     for (int i = 0; i < n_elems; ++i) {
         rnd_mem[i] = dist(gen);
+        //std::cout << "Rand number: " << rnd_mem[i] << std::endl;
     }
 
     //try to memcpy from cpu to gpu 
@@ -402,13 +472,39 @@ void GPU::Device::matmul_ver1_gpu(float* a, float* b, float* c,
 
     if (!GPU::Device::validate_matmul(a_col, b_row)) {
         std::cerr << "Error: matmul invalid matrix dimensions!" << std::endl;
+        std::cerr 
+            << "a_col: " << a_col << "\n" 
+            << "a_row: " << a_row << "\n"
+            << "b_col: " << b_col << "\n"
+            << "b_row: " << b_row << "\n" << std::endl;
+
+        exit(-1);
+
         return;
     }
 
-    dim3 grid_dimensions(ceilf(c_row / 32.0), ceilf(c_col / 32.0), 1);
+    if (!a || !b || !c) {
+
+        if (!a) {
+            std::cerr << "A POINTER IS NULL" << std::endl;
+        }
+
+        if (!b) {
+            std::cerr << "B POINTER IS NULL" << std::endl;
+        }
+
+        if (!c) {
+            std::cerr << "C POINTER IS NULL" << std::endl;
+        }
+
+        std::cerr << "GPU::Device::matmul_ver1_gpu | NULL POINTER!!!!" << std::endl;
+        exit(-1);
+    }
+
+    dim3 grid_dimensions(ceilf(c_col / 32.0), ceilf(c_row / 32.0), 1);
     dim3 block_dimensions(32, 32, 1);
 
-    std::cout << "Grid dims: " << grid_dimensions.x << " " << grid_dimensions.y << std::endl;
+    //std::cout << "Grid dims: " << c_row << " " << c_col << " | " << ceilf(c_row / 32.0) << " " <<  ceilf(c_col / 32.0) << std::endl;
 
     switch (actv_fn) {
 
@@ -434,17 +530,26 @@ __global__
 void matadd_v1(float* A, float* B, float* C,
         size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
 
-void GPU::Device::matadd_ver1(float* a, float* b, float* c, size_t a_col, size_t a_row, 
-        size_t b_col, size_t b_row, size_t c_col, size_t c_row, const cudaStream_t stream) const noexcept {
+void GPU::Device::matadd_ver1(float* a, float* b, float* c, 
+        size_t a_col, size_t a_row, size_t b_col, size_t b_row, 
+        size_t c_col, size_t c_row, const cudaStream_t stream) const noexcept {
 
     if (!GPU::Device::validate_matadd(a_col, a_row, b_col, b_row) 
             || !GPU::Device::validate_matadd(a_col, a_row, c_col, c_row)) {
 
         std::cerr << "Error: matadd invalid matrix dimensions!" << std::endl;
+        std::cerr 
+            << "a_col: " << a_col << "\n" 
+            << "a_row: " << a_row << "\n"
+            << "b_col: " << b_col << "\n"
+            << "b_row: " << b_row << "\n" 
+            << "c_col: " << c_col << "\n"
+            << "c_row: " << c_row << "\n" << std::endl;
+
         return;
     }
 
-    dim3 grid_dimensions(ceilf(c_row / 32.0), ceilf(c_col / 32.0), 1);
+    dim3 grid_dimensions(ceilf(c_col / 32.0), ceilf(c_row / 32.0), 1);
     dim3 block_dimensions(32, 32, 1);
 
     matadd_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
@@ -541,14 +646,14 @@ void GPU::Device::conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaS
 
     const size_t elm_total = out.dat_y * out.dat_x;
     const size_t elm_y = ceilf(elm_total / 32.0);
-    
+
     dim3 grid_dimensions(1, 1, 1);
     dim3 block_dimensions(32, elm_y, 1);
 
     conv_ReLU2<<<grid_dimensions, block_dimensions, 0, stream>>>(
-        b.dat_pointer, a.dat_pointer, out.dat_pointer, 
-        b.dat_x, a.dat_x, out.dat_x, b.dat_z 
-    );
+            b.dat_pointer, a.dat_pointer, out.dat_pointer, 
+            b.dat_x, a.dat_x, out.dat_x, b.dat_z 
+            );
 }
 
 __global__
@@ -590,7 +695,7 @@ void GPU::Device::batched_max_pool_ver1(const Tensor input, Tensor out, size_t* 
 __global__
 void pool_ver2(const float* input, float* out, int* idx, int in_dim, int out_dim, int pool_size);
 
-void max_pool_ver2(const GPU::Tensor input, GPU::Tensor out, int* idx, const int pool_size, cudaStream_t stream) {
+void GPU::Device::max_pool_ver2(const GPU::Tensor input, GPU::Tensor out, int* idx, const int pool_size, cudaStream_t stream) {
 
     const size_t elm_total = out.dat_y * out.dat_x;
     const size_t elm_y = ceilf(elm_total / 32.0);
@@ -599,9 +704,9 @@ void max_pool_ver2(const GPU::Tensor input, GPU::Tensor out, int* idx, const int
     dim3 block_dimensions(32, elm_y, 1);
 
     pool_ver2<<<grid_dimensions, block_dimensions, 0, stream>>>(
-        input.dat_pointer, out.dat_pointer, idx, 
-        input.dat_x, out.dat_x, pool_size
-    );
+            input.dat_pointer, out.dat_pointer, idx, 
+            input.dat_x, out.dat_x, pool_size
+            );
 
 }
 

@@ -14,6 +14,10 @@ std::pair<uint32_t, uint32_t> ConvolutionalLayer::calc_output_size(
     return std::pair<uint32_t, uint32_t> { out_x, out_y };
 }
 
+ConvolutionalLayer::ConvolutionalLayer() {
+
+}
+
 ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction actv_func,
             const uint32_t feature_maps, 
             const uint32_t input_chanels, const uint32_t kernel_dim, 
@@ -130,6 +134,7 @@ void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cuda
 
     //queue up jobs and wait for them to finish
     for (size_t i = 0; i < this->feature_maps; ++i) {
+
         this->gpu.conv_ver2(
                 a, 
                 GPU::Tensor { 
