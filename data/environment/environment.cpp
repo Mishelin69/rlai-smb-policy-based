@@ -225,12 +225,12 @@ void Environment::update_frame(
     }
 
     simulate_enemies();
-
     this->update_player();
-
     this->mirror();
 
-    compute_reward();
+    //Dont add this, only creates add effects, the purpose of this 
+    //function is to update the frame, not to do anything else! :)
+    //compute_reward();
 }
 
 uint32_t Environment::index_last_frame() {
@@ -269,6 +269,12 @@ void Environment::mirror() {
 
     //HANDLE PLAYER TOP LEFT OVERFLOW BY ADDING 0 TO IT 
     //OR GOING DOWN BUT PROB ADDING 0 BETTER
+    if ((top_left_y > this->player_pos.y - 2) || (top_left_x > this->player_pos.x - 2)) {
+
+        const size_t max_upwards_y = std::max(0, static_cast<int>(this->player_pos.y) - 10);
+        const size_t max_upwards_x = std::max(0, static_cast<int>(this->player_pos.x) - 2);
+
+    }
 
     for (size_t i = 0; i < MAP_DIM; ++i) {
 
@@ -329,6 +335,7 @@ void Environment::compute_reward() {
     float c = this->last_timer - this->timer;
     float d = (this->player_dead) ? -15.0f : 0.f;
 
+    std::cout << "RIndex access: " << this->rindex << " VectorCapacity: " << this->rewards.capacity() << " VectorSize: " << this->rewards.size() << std::endl;
     //THIS ACCESS CAUSES CRASHES ???? WHY THO? ?? IDK
     this->rewards[this->rindex] = v + c + d;
     this->rindex += 1;
