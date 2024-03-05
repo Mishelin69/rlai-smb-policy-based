@@ -271,8 +271,28 @@ void Environment::mirror() {
     //OR GOING DOWN BUT PROB ADDING 0 BETTER
     if ((top_left_y > this->player_pos.y - 2) || (top_left_x > this->player_pos.x - 2)) {
 
-        const size_t max_upwards_y = std::max(0, static_cast<int>(this->player_pos.y) - 10);
-        const size_t max_upwards_x = std::max(0, static_cast<int>(this->player_pos.x) - 2);
+        const int upwards_y = static_cast<int>(this->player_pos.y) - 10;
+        const int upwards_x = static_cast<int>(this->player_pos.x) - 2;
+
+        //This piece of code is a sin I swear to God :|
+        for (size_t i = 0; i < MAP_DIM; ++i) {
+
+            const int y = upwards_y + i;
+            for (size_t j = 0; j < MAP_DIM; ++j) {
+
+                if (y < 0) {
+                    this->map_mirror[current*MAP_DIM + MAP_DIM*i + j] = 0.0f;
+                } else if ((upwards_x + j) < 0) {
+                    this->map_mirror[current*MAP_DIM + MAP_DIM*i + j] = 0.0f;
+                } else {
+                    this->map_mirror[current*MAP_DIM + MAP_DIM*i + j] = dat_ptr[y * tiles_x + j];
+                }
+            }
+        }
+
+        this->upload_to_gpu();
+
+        return;
 
     }
 
@@ -297,16 +317,16 @@ void Environment::upload_to_gpu() {
     const uint32_t cur_frame = 0;
 
     /*
-    for (size_t i = 0; i < 13; ++i) {
-        for (size_t j = 0; j < 13; ++j) {
-           
-            size_t index = cur_frame * MAP_SIZE + 13*i + j;
-            std::cout << " " << this->map_mirror[index];
-        }
+       for (size_t i = 0; i < 13; ++i) {
+       for (size_t j = 0; j < 13; ++j) {
 
-        std::cout << "" << std::endl;
-    }
-    */
+       size_t index = cur_frame * MAP_SIZE + 13*i + j;
+       std::cout << " " << this->map_mirror[index];
+       }
+
+       std::cout << "" << std::endl;
+       }
+       */
 
     //std::cout << "========================================" << std::endl;
     gpu.memcpy_host(
@@ -316,11 +336,11 @@ void Environment::upload_to_gpu() {
             );
 
     /*
-    gpu.print_mem(
-            this->cuda_env + this->rindex*MAP_SIZE,
-            MAP_SIZE
-            );
-            */
+       gpu.print_mem(
+       this->cuda_env + this->rindex*MAP_SIZE,
+       MAP_SIZE
+       );
+       */
 
     this->current_frame += 1;
 }

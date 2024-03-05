@@ -156,20 +156,14 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
 
 void RLAgent::learn() {
 
-    //Old network pass
     for (size_t i = 0; i < BATCH_SIZE; ++i) {
+
         passtrough(
                 copy_actor, copy_conv, 
                 old_cuda_activations + i * activations_total, 
                 i
                 ); 
     }
-
-    //just in case :)
-    gpu->device_sync();
-
-    //calc softmax on ALL THE ACTIVATIONS 
-    //including OLD/NEW network
 }
 
 RLAgent::RLAgent():
