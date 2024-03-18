@@ -69,6 +69,15 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
             this->streams[0]
             );
 
+    //move to other thread
+    passtrough(
+            this->copy_actor, 
+            this->copy_conv, 
+            this->old_cuda_activations + (current_frame-1) * activations_total, 
+            current_frame-1,
+            this->streams[0]
+            );
+
     //this basically just performs softmax over newest predictions we recorded
     //memsets the softmax to gpu and returns picked option, the one with highest
     //probability calculated by softmax
@@ -78,7 +87,7 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
 uint32_t RLAgent::pick_action() {
 
     //first perform softmax
-    
+
     float max_logit = *std::max_element(this->cpu_final_predict_pass, this->cpu_final_predict_pass + AGENT_NUM_ACTIONS);
 
     float sum_of_exp = 0.0f;
@@ -123,10 +132,10 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
     conv.pass(input.dat_pointer, output.dat_pointer, stream);
 
     input = GPU::Tensor {preds + cnn_activations_footprint - CNN_L5_OUT,
-                ACTOR_L1_IN, ACTOR_L1_IN, ACTOR_L1_IN_DEPTH};
+        ACTOR_L1_IN, ACTOR_L1_IN, ACTOR_L1_IN_DEPTH};
 
     output = GPU::Tensor {preds + cnn_activations_footprint, 
-                ACTOR_L1_OUT, ACTOR_L1_OUT, ACTOR_L1_OUT_DEPTH};
+        ACTOR_L1_OUT, ACTOR_L1_OUT, ACTOR_L1_OUT_DEPTH};
 
     actor.act(input.dat_pointer, output.dat_pointer, stream);
 
@@ -134,7 +143,7 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
     cudaStreamSynchronize(stream);
 
     //copy prediction over to CPU mem so we can later pick action
-    
+
     float* src = preds + cnn_activations_footprint + 
         actor_activations_footprint - 
         ACTOR_L2_OUT;
@@ -166,11 +175,11 @@ void RLAgent::learn() {
         for (size_t i = 0; i < items_per_thread; ++i) {
 
             passtrough(
-                copy_actor, copy_conv, 
-                old_cuda_activations + (thread_id * items_per_thread + i) * activations_total, 
-                (thread_id * items_per_thread + i),
-                thread_stream
-                );
+                    copy_actor, copy_conv, 
+                    old_cuda_activations + (thread_id * items_per_thread + i) * activations_total, 
+                    (thread_id * items_per_thread + i),
+                    thread_stream
+                    );
         }
     }
 
@@ -180,14 +189,14 @@ void RLAgent::learn() {
 
     //Old network pass
     /*
-    for (size_t i = 0; i < BATCH_SIZE; ++i) {
-        passtrough(
-                copy_actor, copy_conv, 
-                old_cuda_activations + i * activations_total, 
-                i
-                ); 
-    }
-    */
+       for (size_t i = 0; i < BATCH_SIZE; ++i) {
+       passtrough(
+       copy_actor, copy_conv, 
+       old_cuda_activations + i * activations_total, 
+       i
+       ); 
+       }
+       */
 
     //just in case :)
     gpu.device_sync();
