@@ -14,3 +14,10 @@ for stream in streams:
     cudaStreamSynchronize(stream)
 
 //now pick actions and stuff thats why its separate :)
+
+====================NEW STRATEGY====================
+Okay so new strategy, have each request concurently process
+each network the output and calculate V(t) and work on the discount 
+gradually and then just perform updates (ofc sum up the clipped 
+surrogates and stuff but you get it, do the last at the end
+theyll still be some stuff to do [weight updates]) to reduce the lag D:

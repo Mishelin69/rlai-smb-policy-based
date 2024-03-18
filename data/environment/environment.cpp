@@ -260,8 +260,6 @@ void Environment::mirror() {
     const uint32_t top_left_x = this->player_pos.x - 2;
     const uint32_t top_left_y = this->player_pos.y - 10;
 
-    std::cout << "Top left x: " << top_left_x << " Top left y: " << top_left_y << std::endl;
-
     const TileMapData& stage = this->stages[this->current_stage];
     float* dat_ptr = stage.dat;
 
@@ -355,7 +353,6 @@ void Environment::compute_reward() {
     float c = this->last_timer - this->timer;
     float d = (this->player_dead) ? -15.0f : 0.f;
 
-    std::cout << "RIndex access: " << this->rindex << " VectorCapacity: " << this->rewards.capacity() << " VectorSize: " << this->rewards.size() << std::endl;
     //THIS ACCESS CAUSES CRASHES ???? WHY THO? ?? IDK
     this->rewards[this->rindex] = v + c + d;
     this->rindex += 1;

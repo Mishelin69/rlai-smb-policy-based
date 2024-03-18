@@ -65,7 +65,8 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
             this->actor, 
             this->conv, 
             this->cuda_activations + (current_frame-1) * activations_total, 
-            current_frame-1
+            current_frame-1,
+            this->streams[0]
             );
 
     //this basically just performs softmax over newest predictions we recorded
@@ -110,7 +111,7 @@ uint32_t RLAgent::pick_action() {
     return actor_out - 1;
 }
 
-void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i) {
+void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i, cudaStream_t stream) {
 
     //nah this will only work as intended, the other stuff will get coded in later 
     //like its simple I have my own reference to work with
@@ -119,7 +120,7 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
     GPU::Tensor input = GPU::Tensor { cuda_frame, CNN_L1_IN, CNN_L1_IN, CNN_L1_IN_DEPTH };
     GPU::Tensor output = GPU::Tensor { preds, CNN_L1_OUT, CNN_L1_OUT, CNN_L2_OUT_DEPTH };
 
-    conv.pass(input.dat_pointer, output.dat_pointer, this->streams[0]);
+    conv.pass(input.dat_pointer, output.dat_pointer, stream);
 
     input = GPU::Tensor {preds + cnn_activations_footprint - CNN_L5_OUT,
                 ACTOR_L1_IN, ACTOR_L1_IN, ACTOR_L1_IN_DEPTH};
@@ -127,10 +128,10 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
     output = GPU::Tensor {preds + cnn_activations_footprint, 
                 ACTOR_L1_OUT, ACTOR_L1_OUT, ACTOR_L1_OUT_DEPTH};
 
-    actor.act(input.dat_pointer, output.dat_pointer, this->streams[0]);
+    actor.act(input.dat_pointer, output.dat_pointer, stream);
 
     gpu.device_sync();
-    cudaStreamSynchronize(this->streams[0]);
+    cudaStreamSynchronize(stream);
 
     //copy prediction over to CPU mem so we can later pick action
     
@@ -149,14 +150,36 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
         std::cerr << "RLAgent::passtrough | Error copying data from gpu over to cpu!" << std::endl;
     }
 
-    cudaStreamSynchronize(this->streams[0]);
+    cudaStreamSynchronize(stream);
     //function to perform softmax !!!
 
 }
 
 void RLAgent::learn() {
 
+    size_t items_per_thread = BATCH_SIZE / THREAD_POOL_SIZE; 
+
+    for (size_t thread_id = 0; thread_id < THREAD_POOL_SIZE; ++thread_id) {
+
+        cudaStream_t thread_stream = this->streams[thread_id];
+
+        for (size_t i = 0; i < items_per_thread; ++i) {
+
+            passtrough(
+                copy_actor, copy_conv, 
+                old_cuda_activations + (thread_id * items_per_thread + i) * activations_total, 
+                (thread_id * items_per_thread + i),
+                thread_stream
+                );
+        }
+    }
+
+    for (size_t i = 0; i < THREAD_POOL_SIZE; ++i) {
+        cudaStreamSynchronize(streams[i]);   
+    }
+
     //Old network pass
+    /*
     for (size_t i = 0; i < BATCH_SIZE; ++i) {
         passtrough(
                 copy_actor, copy_conv, 
@@ -164,9 +187,10 @@ void RLAgent::learn() {
                 i
                 ); 
     }
+    */
 
     //just in case :)
-    gpu->device_sync();
+    gpu.device_sync();
 
     //calc softmax on ALL THE ACTIVATIONS 
     //including OLD/NEW network

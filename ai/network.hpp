@@ -11,7 +11,7 @@
 #define CUDA_STREAMS 4
 
 #ifndef THREAD_POOL_SIZE
-    #define THREAD_POOL_SIZE 16
+    #define THREAD_POOL_SIZE CUDA_STREAMS
 #endif
 
 #ifndef RLAGENT_EPSILON
@@ -286,7 +286,7 @@ class RLAgent {
 
     private:
 
-    void passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i);
+    void passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i, cudaStream_t stream);
 
     //performs Stochastic Policy Action Selection
     uint32_t pick_action();
