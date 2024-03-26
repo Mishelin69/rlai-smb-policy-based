@@ -214,7 +214,7 @@ public:
 
     void conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream);
 
-    void conv_add(Tensor a, Tensor b, cudaStream_t stream);
+    void conv_add(Tensor a, Tensor b, int bias_index, cudaStream_t stream);
 
     //This is where I actually started using brain instead of being dumb :)
     void batched_max_pool_ver1(const Tensor input, Tensor out, size_t* idx_ptr, 
@@ -225,6 +225,9 @@ public:
     void matmul_elementwise(Tensor a, Tensor b, Tensor out, 
             const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept;
 
+    //general advantage estimation
+    void gae_delta(Tensor out, const GPU::Tensor rewards, const GPU::Tensor values,
+                const float gamma, const cudaStream_t stream); 
 };
 
 }

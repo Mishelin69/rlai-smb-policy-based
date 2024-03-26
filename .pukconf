@@ -4,7 +4,7 @@ nvcc
 --threads 0
 -std=c++17
 -IC:/Users/milos/Desktop/home/coding/github/rlai-smb-policy-based/external/json/include/
--g -G -Xcompiler "/Zi /Od /MDd"
+-O3
 
 gpu
 ai

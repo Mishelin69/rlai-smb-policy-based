@@ -46,6 +46,8 @@ public:
             const uint32_t input_chanels, const uint32_t kernel_dim, 
             const uint32_t input, float* cuda_w, float* cuda_b);
 
+    void deep_copy(const ConvolutionalLayer& other);
+
     ConvolutionalLayer();
 
     ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction func,

@@ -60,6 +60,15 @@ ConvolutionalLayer::ConvolutionalLayer(GPU::Device& gpu, GPU::ActivationFunction
         }
     }
 
+void ConvolutionalLayer::deep_copy(const ConvolutionalLayer& original) {
+
+    cudaMemcpy(this->cuda_kernel, original.cuda_kernel, 
+            sizeof(float) * input_chanels * feature_maps * kernel_x * kernel_y, cudaMemcpyDeviceToDevice);
+
+    cudaMemcpy(this->cuda_bias, original.cuda_bias, 
+            sizeof(float) * feature_maps, cudaMemcpyDeviceToDevice);
+}
+
 //Ughhh God Im so lazy please finish this while Im away :) <3
 //He did not finish it, I sadly had to do it myself :( not cool
 void ConvolutionalLayer::init_self(GPU::Device& gpu, GPU::ActivationFunction func,
@@ -101,7 +110,7 @@ void ConvolutionalLayer::init_self(GPU::Device& gpu, GPU::ActivationFunction fun
         exit(-1);
     }
 
-    res = gpu.random_numbers(this->cuda_bias, feature_maps * out_x * out_x);
+    res = gpu.random_numbers(this->cuda_bias, feature_maps);
 
     if (res != 0) {
         std::cerr << "ConvolutionalLayer::ConvolutionalLayer() | Error while trying to initialize bias data!" << std::endl;
@@ -166,10 +175,10 @@ void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cuda
                 dim_x,
                 dim_y,
                 1
-                }, stream);
+                }, i, stream);
     }
 
     //wait for the GPU to finish it's job (stream)
     //keep the data on the GPU tho
-    cudaStreamSynchronize(stream);
+    //cudaStreamSynchronize(stream);
 }

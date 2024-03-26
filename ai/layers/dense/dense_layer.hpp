@@ -28,6 +28,8 @@ public:
     void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
             const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func);
 
+    void deep_copy(const DenseLayer& original);
+
     DenseLayer(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
             const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func);
     DenseLayer(DenseLayer& other) = default;

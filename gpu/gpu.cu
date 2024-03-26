@@ -657,9 +657,9 @@ void GPU::Device::conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaS
 }
 
 __global__
-void conv_add_gpu(float* A, float* B, int a_dim, int b_dim);
+void conv_add_gpu(float* A, float* B, int a_dim, int b_dim, int bias_index);
 
-void GPU::Device::conv_add(Tensor a, Tensor b, cudaStream_t stream) {
+void GPU::Device::conv_add(Tensor a, Tensor b,int bias_index, cudaStream_t stream) {
 
     const size_t elm_total = b.dat_y * b.dat_x;
     const size_t elm_y = ceilf(elm_total / 32.0);
@@ -668,7 +668,7 @@ void GPU::Device::conv_add(Tensor a, Tensor b, cudaStream_t stream) {
     dim3 block_dimensions(32, elm_y, 1);
 
     conv_add_gpu<<<grid_dimensions, block_dimensions, 0, stream>>>(
-            a.dat_pointer, b.dat_pointer, a.dat_x, b.dat_x);
+            a.dat_pointer, b.dat_pointer, a.dat_x, b.dat_x, bias_index);
 }
 
 __global__
@@ -745,4 +745,17 @@ void GPU::Device::matmul_elementwise(Tensor a, Tensor b, Tensor out,
             return;    
     }
 
+}
+
+__global__
+void gae_delta_v1(float* out, float* r, float* v, float gamma, int items, int x_dim);
+
+void GPU::Device::gae_delta(GPU::Tensor out, const GPU::Tensor rewards, 
+        const GPU::Tensor values, const float gamma, const cudaStream_t stream) {
+
+    if (!validate_pointer(rewards.dat_pointer, rewards.dat_x)) {
+        std::cerr << "GPU::Device::gae_delta | Couldn't validate pointer (rewards tested)!" << std::endl;
+    }
+
+    gae_delta_v1<<<1, rewards.dat_x, 0, stream>>>(out.dat_pointer, rewards.dat_pointer, values.dat_pointer, gamma, rewards.dat_x, 32);
 }

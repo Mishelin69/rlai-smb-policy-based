@@ -69,6 +69,13 @@ void DenseLayer::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b, const
 
 }
 
+void DenseLayer::deep_copy(const DenseLayer& original) {
+
+    cudaMemcpy(this->cudaMat, original.cudaMat, sizeof(float) * mat_x * mat_y, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(this->cudaMat, original.cudaMat, sizeof(float) * biases, cudaMemcpyDeviceToDevice);
+
+}
+
 
 void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) const noexcept {
 
@@ -120,7 +127,6 @@ void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) co
             stream
             );
 
-    cudaStreamSynchronize(stream);
     //exit(-1);
 }
 

@@ -58,33 +58,88 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
 
     std::cout << "Current frame: " << this->current_frame - 1 << " BATCH: " << this->batch_size << std::endl;
 
+    //move to other thread before blocking main with our prediction :)
+    //utilize the power of a different stream !
+
+    pool.detach_task(
+           [this] {
+
+            //std::cout << "Address: " << this->old_cuda_activations + (current_frame-1) * activations_total << std::endl;
+            passtrough(
+                this->copy_actor, 
+                this->copy_conv, 
+                this->old_cuda_activations + (current_frame-1) * activations_total, 
+                this->copy_final_predict_pass,
+                current_frame-1,
+                this->streams[1]
+            ); 
+
+            float agent_choice = pick_action(copy_final_predict_pass);
+
+            auto res = gpu.memcpy_host(&agent_choice, old_cuda_action_taken + current_frame-1, sizeof(float));
+
+            if (res != cudaSuccess) {
+            std::cout << "RLAgent::predict | Error while copying current policy choice over" << std::endl;
+            }
+        }
+    );
     //do a passtrough on a the current state and move data to CPU
     //of course, using the newest actor and conv network
     //-1 because this thing is 1 into the future sort of
+
     passtrough(
             this->actor, 
             this->conv, 
             this->cuda_activations + (current_frame-1) * activations_total, 
+            this->cpu_final_predict_pass,
             current_frame-1,
             this->streams[0]
             );
 
-    //move to other thread
-    passtrough(
-            this->copy_actor, 
-            this->copy_conv, 
-            this->old_cuda_activations + (current_frame-1) * activations_total, 
-            current_frame-1,
-            this->streams[0]
-            );
+    //COMMENT MOVE activations stuff etc
+
+    pool.detach_task(
+            [this] {
+            //calc discounts and values here D:
+            critic.value(
+                    this->cuda_activations + (current_frame-1) * activations_total + cnn_activations_footprint,
+                    this->cuda_activations + BATCH_SIZE * activations_total + (current_frame-1) * critic_activations_footprint, 
+                    this->streams[2]
+                    ); 
+
+            //move Values to the locations this->cuda_values
+
+            auto res = cudaMemcpy(
+                    cuda_values + (current_frame-1),
+                    this->cuda_activations + BATCH_SIZE*activations_total + current_frame*critic_activations_footprint - 1, 
+                    sizeof(float), 
+                    cudaMemcpyDeviceToDevice
+                    );
+
+            if (res != cudaSuccess) {
+            std::cerr << "RLAgent::predict | Copy value from loc 1 to loc 2 failed! " << std::endl;
+            exit(-1);
+            }
+
+
+            //cant do discounts D:
+            }
+    );
 
     //this basically just performs softmax over newest predictions we recorded
     //memsets the softmax to gpu and returns picked option, the one with highest
     //probability calculated by softmax
-    return this->pick_action();
+    float agent_choice = this->pick_action(this->cpu_final_predict_pass);
+    auto res = gpu.memcpy_host(&agent_choice, cuda_action_taken + current_frame-1, sizeof(float));
+
+    if (res != cudaSuccess) {
+        std::cout << "RLAgent::predict | Error while copying current policy choice over" << std::endl;
+    }
+
+    return agent_choice;
 }
 
-uint32_t RLAgent::pick_action() {
+uint32_t RLAgent::pick_action(float* cpu_mem) {
 
     //first perform softmax
 
@@ -93,12 +148,12 @@ uint32_t RLAgent::pick_action() {
     float sum_of_exp = 0.0f;
     for (size_t i = 0; i < AGENT_NUM_ACTIONS; ++i) {
         //std::cout << "Final Activations[" << i << "]: " << cpu_final_predict_pass[i] << std::endl;
-        cpu_final_predict_pass[i] = std::exp(cpu_final_predict_pass[i] - max_logit);
-        sum_of_exp += cpu_final_predict_pass[i];
+        cpu_mem[i] = std::exp(cpu_mem[i] - max_logit);
+        sum_of_exp += cpu_mem[i];
     }
 
     for (size_t i = 0; i < AGENT_NUM_ACTIONS; ++i) {
-        cpu_final_predict_pass[i] /= sum_of_exp;
+        cpu_mem[i] /= sum_of_exp;
     }
 
     for (size_t i = 0; i < AGENT_NUM_ACTIONS; ++i) {
@@ -110,7 +165,7 @@ uint32_t RLAgent::pick_action() {
 
     for (size_t i = 0; i < this->actor_out; ++i) {
 
-        cumulative_probability += this->cpu_final_predict_pass[i];
+        cumulative_probability += cpu_mem[i];
 
         if (cumulative_probability > rng_number) {
             return i;
@@ -120,7 +175,7 @@ uint32_t RLAgent::pick_action() {
     return actor_out - 1;
 }
 
-void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i, cudaStream_t stream) {
+void RLAgent::passtrough(Actor& actor, ConvNetwork& conv, float* preds, float* cpu_final, uint32_t i, cudaStream_t stream) {
 
     //nah this will only work as intended, the other stuff will get coded in later 
     //like its simple I have my own reference to work with
@@ -139,7 +194,7 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
 
     actor.act(input.dat_pointer, output.dat_pointer, stream);
 
-    gpu.device_sync();
+    //gpu.device_sync();
     cudaStreamSynchronize(stream);
 
     //copy prediction over to CPU mem so we can later pick action
@@ -151,7 +206,9 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
     //COMMENT BIG NEWS, DIVIDE BY 4 TO GET THE ACTUAL ELEMENT DIFFERENCE
     //BECAUSE IT PRINTS BYTES, NOT ELEMS OR WHATEVER :)
 
-    int res = this->gpu.memcpy_device(src, this->cpu_final_predict_pass,
+    //Possible error I may be overwritting this when calling predict old 
+    //not very likely but still a possibility
+    int res = this->gpu.memcpy_device(src, cpu_final,
             sizeof(float) * AGENT_NUM_ACTIONS);
 
     if (res != cudaSuccess) {
@@ -166,43 +223,46 @@ void RLAgent::passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i
 
 void RLAgent::learn() {
 
-    size_t items_per_thread = BATCH_SIZE / THREAD_POOL_SIZE; 
+    //wait for all the threads to finish before moving on with the stuff C:
+    pool.wait();
 
-    for (size_t thread_id = 0; thread_id < THREAD_POOL_SIZE; ++thread_id) {
-
-        cudaStream_t thread_stream = this->streams[thread_id];
-
-        for (size_t i = 0; i < items_per_thread; ++i) {
-
-            passtrough(
-                    copy_actor, copy_conv, 
-                    old_cuda_activations + (thread_id * items_per_thread + i) * activations_total, 
-                    (thread_id * items_per_thread + i),
-                    thread_stream
-                    );
-        }
+    for (auto& stream: streams) {
+        cudaStreamSynchronize(stream);
     }
 
-    for (size_t i = 0; i < THREAD_POOL_SIZE; ++i) {
-        cudaStreamSynchronize(streams[i]);   
+    this->copy_conv.deep_copy(gpu, conv);
+    this->copy_actor.deep_copy(gpu, actor);
+
+    //NOTE IT CRASHED FOR SOME REASON IDK WHY PROBABLY SOME INVALID ACCESS THAT EVENTUALL
+    //HAPPENED SINCE NO ERROR MESSAGE!
+    //okay only seems to be happening in the memory sanetizer
+
+    //This will be used for Ctitic loss :)
+    auto res = gpu.memcpy_host(cuda_rewards, cpu_rewards, sizeof(float)*BATCH_SIZE);
+
+    if (res != cudaSuccess) {
+        std::cerr << "RLAgent::learn | Error while copying memory from device to host (rewards)!" << std::endl;
     }
 
-    //Old network pass
-    /*
-       for (size_t i = 0; i < BATCH_SIZE; ++i) {
-       passtrough(
-       copy_actor, copy_conv, 
-       old_cuda_activations + i * activations_total, 
-       i
-       ); 
-       }
-       */
+    float running_sum = cpu_rewards[BATCH_SIZE - 1];
 
-    //just in case :)
-    gpu.device_sync();
+    //omg havent written any of these in a while while
+    for (int i = BATCH_SIZE - 2; i >= 0; --i) {
+        running_sum = cpu_rewards[i] + RLAGENT_GAMMA * running_sum;
+        cpu_rewards[i] = running_sum;
+    }
+
+    res = gpu.memcpy_device(cpu_rewards, cuda_discounted_rewards, sizeof(float)*BATCH_SIZE);
+
+    if (res != cudaSuccess) {
+        std::cerr << "RLAgent::learn | Error while copying memory from cpu to device (rewards)!" << std::endl;
+    }
 
     //calc softmax on ALL THE ACTIVATIONS 
     //including OLD/NEW network
+    //DONT FORGET TO UPDATE OLD MODELS YK :) IDEALLY
+
+    reset_activations();
 }
 
 RLAgent::RLAgent():
@@ -301,6 +361,15 @@ RLAgent::RLAgent():
                 sizeof(float) * 4 // Alignment to 128 bits
                 )/4;
 
+        size_t extra_mem = GPU::mem_needed_align(
+                BATCH_SIZE + //PPO Objective
+                BATCH_SIZE + //discounted rewards
+                BATCH_SIZE + //gae_lambda
+                BATCH_SIZE + //gae rewards
+                1 + 1 //sum_ppo, sum_critic_loss
+                ,
+                sizeof(float) * 4)/4;
+
         auto TOTAL_MEM_NEEDED = 
             this->weights_total * 2 + //weight needed for network and network old
             this->biases_total * 2 + //biases needed =||=
@@ -310,7 +379,8 @@ RLAgent::RLAgent():
             grad_with_out * BATCH_SIZE + 
             cnn_gradient_size * BATCH_SIZE +
             critic_gradient_size * BATCH_SIZE +
-            actor_gradient_size * BATCH_SIZE; 
+            actor_gradient_size * BATCH_SIZE +
+            extra_mem; 
 
         std::cout << "biases total: " << biases_total << std::endl;
 
@@ -393,6 +463,8 @@ RLAgent::RLAgent():
 
         float* space_actv_old = big_block + p_offset;
         this->old_cuda_activations = space_actv_old;
+        //std::cout << "Space for old: " << space_actv_old << std::endl;
+        //std::cout << "Redundant print space for old: " << this->old_cuda_activations << std::endl;
 
         p_offset += BATCH_SIZE * activations_total;
 
@@ -448,7 +520,50 @@ RLAgent::RLAgent():
 
         p_offset += actor_gradient_size * BATCH_SIZE;
 
+        float* ppo_objective = big_block + p_offset;
+        this->cuda_ppo_objective = ppo_objective;
+
+        p_offset += BATCH_SIZE;
+
+        float* discounted_rewards = big_block + p_offset;
+        this->cuda_discounted_rewards = discounted_rewards;
+
+        p_offset += BATCH_SIZE;
+
+        float* gae_delta = big_block + p_offset;
+        this->cuda_gae_delta = gae_delta;
+
+        p_offset += BATCH_SIZE;
+
+        float* gae = big_block + p_offset;
+        this->cuda_gae = gae;
+
+        p_offset += BATCH_SIZE;
+
+        float* sum_ppo = big_block + p_offset;
+        this->sum_ppo = sum_ppo;
+
+        p_offset += 1;
+
+        float* sum_critic_loss = big_block + p_offset;
+        this->sum_critic_loss = sum_critic_loss;
+
+        p_offset += 1;
+
+        //Ill just alloc separately idc 
         this->reset_activations();
+
+        float* mem = gpu.allocate_memory(sizeof(float) * 2 * BATCH_SIZE);
+
+        if (!mem) {
+            std::cerr << "RLAgent::RLAgent | Error while allocating mem for agents choices!" << std::endl;
+        }
+
+        float* mem_for_old_choices = mem;
+        this->old_cuda_action_taken = mem_for_old_choices;
+
+        float* mem_for_current_choices = mem + BATCH_SIZE;
+        this->cuda_action_taken = mem_for_current_choices;
 
         //TIME TO INIT LAYERS
         //FIRST cNN
@@ -472,6 +587,8 @@ RLAgent::RLAgent():
         cuda_w_offset = 0;
         cuda_b_offset = 0;
 
+        //COPY THE ORIGINAL IDEALLY :)
+        //IMPLEMENT THE CORRECT COPY STUFF PLS
         this->copy_conv.init_self(this->gpu, weights_for_old + cuda_w_offset, biases_for_old + cuda_b_offset);
         cuda_w_offset += cnn_weights;
         cuda_b_offset += cnn_biases;
@@ -484,6 +601,9 @@ RLAgent::RLAgent():
         cuda_w_offset += actor_weights;
         cuda_b_offset += actor_biases;
 
+        copy_conv.deep_copy(this->gpu, this->conv);
+        copy_actor.deep_copy(this->gpu, this->actor);
+
         //CPU MEM
         float* cpu_final_pp = new (std::nothrow) float[AGENT_NUM_ACTIONS];
 
@@ -493,6 +613,21 @@ RLAgent::RLAgent():
 
         this->cpu_final_predict_pass = cpu_final_pp;
 
+        float* old_cpu_final_pp = new (std::nothrow) float[AGENT_NUM_ACTIONS];
+
+        if (!old_cpu_final_pp) {
+            std::cerr << "RLAgent::RLAgent() | Failed to allocate memory on the cpu!" << std::endl;
+        }
+
+        this->copy_final_predict_pass = old_cpu_final_pp;
+
+        float* cpu_rewards = new (std::nothrow) float[AGENT_NUM_ACTIONS];
+
+        if (!cpu_rewards) {
+            std::cerr << "RLAgent::RLAgent() | Failed to allocate memory on the cpu (rewards)!" << std::endl;
+        }
+
+        this->cpu_rewards = cpu_rewards;
         //Okay so everything may be initialized maybe? ?? please ?? ?? ?? ??? ?? ??
     }
 
@@ -680,6 +815,14 @@ void ConvNetwork::pass(float* state, float* out, cudaStream_t stream) {
     //std::cout << "Out ptr bef actor: " << output.dat_pointer << std::endl;
     //std::cout << "Weird test: " << out + cnn_activations_footprint << std::endl;
     //std::cout << "Test sum: " << test_sum << std::endl;
+    cudaStreamSynchronize(stream);
+}
+
+void ConvNetwork::deep_copy(GPU::Device& gpu, const ConvNetwork& original) {
+    l1_13x13_16x3x3.deep_copy(original.l1_13x13_16x3x3);
+    l2_11x11_32x4x4.deep_copy(original.l2_11x11_32x4x4);
+    l4_4x4_32x3x3.deep_copy(original.l4_4x4_32x3x3);
+    l5_2x2x32_64.deep_copy(original.l5_2x2x32_64);
 }
 
 ////////////////////////////////////////////////////////
@@ -733,6 +876,7 @@ void Critic::value(float* cnn_processed, float* out, cudaStream_t stream) {
 
     l2_64_1.passthrough(input.dat_pointer, output.dat_pointer, stream);
 
+    cudaStreamSynchronize(stream);
 }
 
 ////////////////////////////////////////////////////////
@@ -763,6 +907,12 @@ void Actor::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b) {
     l2_64_4.init_self(gpu, cuda_w + weights_offset, cuda_b + biases_offset, 
             l2_neurons, l2_input, GPU::ActivationFunction::ReLU, GPU::ActivationFunction::DerReLU);
 
+}
+
+
+void Actor::deep_copy(GPU::Device& gpu, const Actor& original) {
+    this->l1_64_64.deep_copy(original.l1_64_64);
+    this->l2_64_4.deep_copy(original.l2_64_4);
 }
 
 void Actor::act(float* cnn_processed, float* out, cudaStream_t stream) {
@@ -811,5 +961,6 @@ void Actor::act(float* cnn_processed, float* out, cudaStream_t stream) {
     //GPU::print_mem(output.dat_pointer, output.dat_x * 1 * output.dat_z); 
     //exit(-1);
 
+    cudaStreamSynchronize(stream);
 }
 

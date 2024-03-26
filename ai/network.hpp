@@ -4,7 +4,7 @@
 #include "layers/dense/dense_layer.hpp"
 #include "layers/max_pooling/max_pooling.hpp"
 #include "../data/environment/environment.hpp"
-#include "../thread-pool/pool.hpp"
+#include "../external/thread-pool/include/BS_thread_pool.hpp"
 #include <random>
 
 #define BATCH_SIZE 32
@@ -21,6 +21,10 @@
 //discount factor
 #ifndef RLAGENT_GAMMA
     #define RLAGENT_GAMMA 0.9f
+#endif
+
+#ifndef RLAGENT_LAMBDA
+    #define RLAGENT_LAMBDA 0.9f
 #endif
 
 #define AGENT_NUM_ACTIONS 4
@@ -117,6 +121,7 @@ public:
     void apply_gradient(float* gradients, float loss);
 
     void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b);
+    void deep_copy(GPU::Device& gpu, const Actor& original);
 };
 
 class Critic {
@@ -153,7 +158,7 @@ public:
     void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b);
 };
 
-//include conv_layer_biases, max pooling, first without and then with
+//include conv_layer_biases, max pooling, ncfirst without and then with
 class ConvNetwork {
 
 private:
@@ -182,6 +187,7 @@ public:
     ConvNetwork(const ConvNetwork&& other);
 
     void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b);
+    void deep_copy(GPU::Device& gpu, const ConvNetwork& original);
 
     //this will be calculated two times each training steps 
     //due to Actor and Critic shared architecture
@@ -240,11 +246,16 @@ class RLAgent {
     //3 extra floats wont kill anybody
     //this will be on CPU
     float* cpu_final_predict_pass;
+    float* copy_final_predict_pass;
 
     float* cuda_rewards;
     float* cuda_advantage;
     float* cuda_values;
     float* cuda_returns;
+    float* cpu_rewards;
+
+    float* old_cuda_action_taken;
+    float* cuda_action_taken;
 
     //this is not with respect to the output, this is 
     //just for weights and biases maybe idk, 
@@ -257,6 +268,13 @@ class RLAgent {
     //this is streams_size * max space needed for gradients for (var name too long to write D:)
     //two subsequent layers (yeah that much wasted memory :O)
     float* cuda_gradients_with_respect_out;
+
+    float* cuda_ppo_objective;
+    float* cuda_discounted_rewards;
+    float* cuda_gae_delta;
+    float* cuda_gae;
+    float* sum_ppo;
+    float* sum_critic_loss;
 
     uint32_t weights_total;
     uint32_t biases_total;
@@ -282,14 +300,14 @@ class RLAgent {
     //we align for 128(4 * 32) bits since thats the most GPU warps can mem access at a time
     Allocator alloc = Allocator(this->gpu, sizeof(float)*4); 
     Environment env = Environment("C:/Users/milos/Desktop/home/coding/github/rlai-smb-policy-based/data/parse-mario-level-img/out", this->gpu, this->cuda_env);
-    ThreadPool::Pool pool = ThreadPool::Pool(CUDA_STREAMS);
+    BS::thread_pool pool = BS::thread_pool(CUDA_STREAMS);
 
     private:
 
-    void passtrough(Actor actor, ConvNetwork conv, float* preds, uint32_t i, cudaStream_t stream);
+    void passtrough(Actor& actor, ConvNetwork& conv, float* preds, float* cpu_final, uint32_t i, cudaStream_t stream);
 
     //performs Stochastic Policy Action Selection
-    uint32_t pick_action();
+    uint32_t pick_action(float* cpu_mem);
 
     //calculates all the advantages, which is basically just
     //values (from critic) sub returns =>
