@@ -501,8 +501,10 @@ void GPU::Device::matmul_ver1_gpu(float* a, float* b, float* c,
         exit(-1);
     }
 
-    dim3 grid_dimensions(ceilf(c_col / 32.0), ceilf(c_row / 32.0), 1);
-    dim3 block_dimensions(32, 32, 1);
+    int elm_total = c_col * c_row;
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, ceilf(elm_total/32.0), 1);
 
     //std::cout << "Grid dims: " << c_row << " " << c_col << " | " << ceilf(c_row / 32.0) << " " <<  ceilf(c_col / 32.0) << std::endl;
 
@@ -549,8 +551,8 @@ void GPU::Device::matadd_ver1(float* a, float* b, float* c,
         return;
     }
 
-    dim3 grid_dimensions(ceilf(c_col / 32.0), ceilf(c_row / 32.0), 1);
-    dim3 block_dimensions(32, 32, 1);
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, ceilf((c_row * c_col) / 32.0), 1);
 
     matadd_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(a, b, c, a_col, a_row, b_col, b_row, c_col, c_row);
 }
@@ -657,9 +659,107 @@ void GPU::Device::conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaS
 }
 
 __global__
+void conv_pre(float* k, float* a, float* out, int k_size, 
+        int a_size,  int out_size, int n_elms);
+
+void GPU::Device::conv_ver2_preactivations(Tensor out, Tensor inp, Tensor weights, 
+        Tensor bias, cudaStream_t stream) {
+
+    if (!GPU::Device::validate_convolution(weights.dat_x, inp.dat_x, out.dat_x)) {
+
+        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        return;
+    }
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+    //=======//
+    //  ++i  //
+    // i+=1  //
+    //=======//
+    //  i++  //
+    //   i   //
+    // i+=1  //
+    //=======//
+
+    for (int i = 0; i < out.dat_z; ++i) {
+        conv_add(
+            GPU::Tensor { 
+            bias.dat_pointer, 
+            out.dat_x, //actually if this wasnt uint32_t even -1 could be here and it wouldnt matter lol
+            1,//1 because same bias for everything 
+              //also bias is just 1D vector where its shape is (n,) 
+              //where n => number of output feature maps
+            1,
+            },
+
+            GPU::Tensor {
+            out.dat_pointer + out.dat_x*out.dat_y*i,
+            out.dat_x,
+            out.dat_y,
+            1
+            }, 
+            i, 
+            stream
+        );
+    }
+
+
+    for (int i = 0; i < out.dat_z; ++i) {
+        conv_pre<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            weights.dat_pointer+i*weights.dat_x*weights.dat_y, 
+            inp.dat_pointer, 
+            out.dat_pointer, 
+            weights.dat_x, 
+            inp.dat_x, 
+            out.dat_x, 
+            weights.dat_z 
+        );
+    }
+}
+
+__global__
+void full_conv_v1(float* k, float* a, float* out, int k_size, 
+        int a_size,  int out_size, int n_elms);
+
+void GPU::Device::full_convolution(Tensor out, Tensor inp, Tensor weights, cudaStream_t stream) {
+
+    if (!GPU::Device::validate_convolution(weights.dat_x, inp.dat_x, out.dat_x)) {
+
+        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        return;
+    }
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    //weights are actually kernels !
+    for (int i = 0; i < out.dat_z; ++i) {
+        conv_pre<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            weights.dat_pointer+i*weights.dat_x*weights.dat_y, 
+            inp.dat_pointer, 
+            out.dat_pointer, 
+            weights.dat_x, 
+            inp.dat_x, 
+            out.dat_x, 
+            weights.dat_z 
+        );
+    }
+
+}
+
+__global__
 void conv_add_gpu(float* A, float* B, int a_dim, int b_dim, int bias_index);
 
-void GPU::Device::conv_add(Tensor a, Tensor b,int bias_index, cudaStream_t stream) {
+void GPU::Device::conv_add(Tensor a, Tensor b, int bias_index, cudaStream_t stream) {
 
     const size_t elm_total = b.dat_y * b.dat_x;
     const size_t elm_y = ceilf(elm_total / 32.0);
@@ -692,6 +792,7 @@ void GPU::Device::batched_max_pool_ver1(const Tensor input, Tensor out, size_t* 
             );
 
 }
+
 __global__
 void pool_ver2(const float* input, float* out, int* idx, int in_dim, int out_dim, int pool_size);
 
@@ -711,10 +812,29 @@ void GPU::Device::max_pool_ver2(const GPU::Tensor input, GPU::Tensor out, int* i
 }
 
 __global__
+void unpooling_v1(float* out, size_t* indices, float* loss, int output_dim, int in_dim, int pool_size); 
+
+void GPU::Device::max_pool_der(Tensor out, Tensor loss, size_t* indices) {
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+    for (size_t i = 0; i < out.dat_z; ++i) {
+
+    }
+}
+
+__global__
 void matmul_elementwise_DerReLU(float* a, float *b, float* c, const size_t x_max, const size_t y_max);
 
 __global__
 void matmul_elementwise_DerSigmoid(float* a, float *b, float* c, const size_t x_max, const size_t y_max);
+
+__global__
+void matmul_elementwise_v1(float* a, float *b, float* c, const size_t x_max, const size_t y_max); 
 
 void GPU::Device::matmul_elementwise(Tensor a, Tensor b, Tensor out, 
         const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept {
@@ -723,6 +843,15 @@ void GPU::Device::matmul_elementwise(Tensor a, Tensor b, Tensor out,
 
         std::cerr << "GPU::Device::matmul_elementwise | Dims not a multiple of 32!!!" << std::endl;
         return;
+    }
+
+    size_t elm1 = a.dat_y*a.dat_x*a.dat_z;
+    size_t elm2 = b.dat_y*b.dat_x*b.dat_z;
+    size_t elm3 = out.dat_y*out.dat_x*out.dat_z;
+
+    if (elm1 != elm2 || elm2 != elm1) {
+        std::cerr << "GPU::Device::matmul_elementwise | Sizes do not match!" << std::endl;
+        std::cerr << "elm1: " << elm1 << " elm2: " << elm2 << " elm3: " << elm3 << std::endl;
     }
 
     dim3 grid_dimensions(ceilf(out.dat_y / 32.0), ceilf(out.dat_x / 32.0), 1);
@@ -738,6 +867,8 @@ void GPU::Device::matmul_elementwise(Tensor a, Tensor b, Tensor out,
             break;
 
         case None:
+            matmul_elementwise_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(a.dat_pointer, b.dat_pointer, out.dat_pointer, out.dat_x, out.dat_y);
+            break;
         case ReLU:
         case Sigmoid:
         default:
@@ -757,5 +888,246 @@ void GPU::Device::gae_delta(GPU::Tensor out, const GPU::Tensor rewards,
         std::cerr << "GPU::Device::gae_delta | Couldn't validate pointer (rewards tested)!" << std::endl;
     }
 
-    gae_delta_v1<<<1, rewards.dat_x, 0, stream>>>(out.dat_pointer, rewards.dat_pointer, values.dat_pointer, gamma, rewards.dat_x, 32);
+    const size_t elm_total = rewards.dat_y * rewards.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+    gae_delta_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(out.dat_pointer, rewards.dat_pointer, values.dat_pointer, gamma, rewards.dat_x, 32);
+}
+
+__global__
+void gae_full_v1(float* out, float* td, float gamma, float lambda, int n_elms);
+
+void GPU::Device::gae_full(GPU::Tensor out, GPU::Tensor td_delta, float gamma, float lambda, cudaStream_t stream) {
+
+    if (!validate_pointer(out.dat_pointer, out.dat_x)) {
+        std::cerr << "GPU::Device::gae_full | Couldn't validate pointer (output tested)!" << std::endl;
+    }
+
+    const size_t elm_total = td_delta.dat_y * td_delta.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    gae_full_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(out.dat_pointer, td_delta.dat_pointer, gamma, lambda, td_delta.dat_x);
+}
+
+__global__
+void ppo_v1(float* out, float* prob, float* prob_old, float* adv, float* idx_cur, 
+        float* idx_prev, float epsilon, int n_elms);
+
+
+void GPU::Device::ppo(Tensor out, Tensor prob_cur, Tensor prob_prev, Tensor adv, Tensor idx_cur, Tensor idx_prev, float epsilon, cudaStream_t stream) {
+
+    if (!validate_pointer(out.dat_pointer, out.dat_x)) {
+        std::cerr << "GPU::Device::ppo | Couldn't validate pointer (output tested)!" << std::endl;
+    }
+
+    const size_t elm_total = prob_cur.dat_y * prob_cur.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    ppo_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            out.dat_pointer,
+            prob_cur.dat_pointer, 
+            prob_prev.dat_pointer,
+            adv.dat_pointer, 
+            idx_cur.dat_pointer,
+            idx_prev.dat_pointer, 
+            epsilon, elm_total);
+
+}
+
+__global__
+void mse_v1(float* out, float* a, float* b, int n_items);
+
+void GPU::Device::mse(Tensor out, Tensor a, Tensor b, cudaStream_t stream) {
+
+    if (!validate_pointer(out.dat_pointer, out.dat_x)) {
+        std::cerr << "GPU::Device::mse | Couldn't validate pointer (output tested)!" << std::endl;
+    }
+
+    const size_t elm_total = a.dat_y * a.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    mse_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            out.dat_pointer,
+            a.dat_pointer,
+            b.dat_pointer,
+            elm_total);
+
+}
+
+__global__
+void mse_der_v1(float* out, float* a, float* b, int n_items);
+
+void GPU::Device::mse_der(Tensor out, Tensor a, Tensor b, cudaStream_t stream) {
+
+    if (!validate_pointer(out.dat_pointer, out.dat_x)) {
+        std::cerr << "GPU::Device::mse | Couldn't validate pointer (output tested)!" << std::endl;
+    }
+
+    const size_t elm_total = a.dat_y * a.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    mse_der_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            out.dat_pointer,
+            a.dat_pointer,
+            b.dat_pointer,
+            elm_total
+            );
+
+}
+
+__global__
+void matmul_preactv_v1(float* A, float* B, float* C, 
+        size_t a_col, size_t a_row, size_t b_col, size_t b_row, size_t c_col, size_t c_row);
+
+//This might be the first function that makes calls to two diffetent
+//kernels :0
+void GPU::Device::preactivations_dense_relu(Tensor out, Tensor inp, Tensor weights, 
+        Tensor bias, cudaStream_t stream) {
+
+    if (!GPU::Device::validate_matmul(inp.dat_x, weights.dat_y)) {
+        std::cerr << "Error: preactivations_dense_relu invalid matrix dimensions!" << std::endl;
+        std::cerr 
+            << "a_col: " << inp.dat_x << "\n" 
+            << "a_row: " << inp.dat_y << "\n"
+            << "b_col: " << weights.dat_x << "\n"
+            << "b_row: " << weights.dat_y << "\n" << std::endl;
+
+        exit(-1);
+
+        return;
+    }
+
+
+    int elm_total = out.dat_x * out.dat_y;
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, ceilf(elm_total/32.0), 1);
+
+    matadd_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            bias.dat_pointer, 
+            out.dat_pointer, 
+            out.dat_pointer, 
+            bias.dat_x,
+            1,
+            bias.dat_x,
+            1,
+            bias.dat_x,
+            1
+            );
+
+    matmul_preactv_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            inp.dat_pointer, weights.dat_pointer, out.dat_pointer, 
+            inp.dat_x, inp.dat_y, 
+            weights.dat_y, weights.dat_x, out.dat_x, out.dat_y
+            );
+}
+
+__global__
+void matsub_v1(float* out, float* a, float* b, int n_elms);
+
+void GPU::Device::matsub(Tensor out, Tensor a, Tensor b, cudaStream_t stream) {
+
+    if (!validate_pointer(out.dat_pointer, out.dat_x)) {
+        std::cerr << "GPU::Device::mse | Couldn't validate pointer (output tested)!" << std::endl;
+    }
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    matsub_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            out.dat_pointer,
+            a.dat_pointer,
+            b.dat_pointer,
+            elm_total
+            );
+
+}
+
+__global__
+void vector_outer_v1(float* output, float* a, float* b, int dim_len, int right);
+
+void GPU::Device::vector_outer(Tensor out, Tensor a, Tensor b, cudaStream_t stream) {
+
+    if (!validate_pointer(out.dat_pointer, out.dat_x)) {
+        std::cerr << "GPU::Device::vector_outer | Couldn't validate pointer (output tested)!" << std::endl;
+    }
+
+    const size_t elm_total = out.dat_y * out.dat_x; //one big problem, I dont have 8k threads :(
+    const size_t elm_y = ceilf(a.dat_x / 32.0);
+
+    int dim_a = a.dat_x * a.dat_y;
+    int dim_b = b.dat_x * b.dat_y;
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+    vector_outer_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+        out.dat_pointer,
+        a.dat_pointer,
+        b.dat_pointer,
+        dim_a,
+        dim_b
+    );
+}
+
+__global__
+void multiply_by_scalar(float* out, float* a, float scalar, int n_items);
+
+void GPU::Device::vector_scalar(Tensor out, Tensor a, float scalar, cudaStream_t stream) {
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    multiply_by_scalar<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            out.dat_pointer,
+            a.dat_pointer,
+            scalar,
+            elm_total
+            );
+}
+
+void GPU::Device::subs_number(Tensor a, float scalar, cudaStream_t stream) {
+
+    float n = 0.0;
+
+    auto status = memcpy_device(a.dat_pointer, &n, sizeof(float));
+
+    if (status != cudaSuccess) {
+        std::cerr << "GPU::Device::subs_number | Error copying data GPU -> CPU" << std::endl;
+    }
+
+    float res = n - scalar;
+
+    status = memcpy_host(&res, a.dat_pointer, sizeof(float));
+
+    if (status != cudaSuccess) {
+        std::cerr << "GPU::Device::subs_number | Error copying data GPU -> CPU" << std::endl;
+    }
 }

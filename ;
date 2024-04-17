@@ -1,0 +1,18 @@
+#ifndef WARP_SIZE
+    #define WARP_SIZE 32
+#endif
+
+__global__
+void vector_outer_v1(float* output, float* a, float* b, int dim_len, int items) {
+
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const int nth_elm = y * WARP_SIZE + x;
+
+    if (nth_elm < items) {
+        int a_index = nth_elm / dim_len;
+        int b_index = nth_elm % dim_len;
+        output[nth_elm] = a[a_index] * b[b_index];
+    }
+};

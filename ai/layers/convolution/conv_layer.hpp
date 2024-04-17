@@ -38,6 +38,9 @@ private:
     GPU::ActivationFunction actv_func;
 
 public:
+    friend class RLAgent;
+
+public:
 
     void convolve(GPU::Tensor a, GPU::Tensor b, float* out, cudaStream_t stream) const noexcept;
 

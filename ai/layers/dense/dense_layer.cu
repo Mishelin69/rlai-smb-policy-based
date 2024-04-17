@@ -100,6 +100,19 @@ void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) co
 
     //std::cout << "OUTPUT Y: " << out_y << " OUTPUT X: " << out_x << std::endl;
 
+    gpu.matadd_ver1(
+            this->cudaBias,
+            out,
+            out,
+            this->biases,
+            1,
+            this->biases,
+            1,
+            out_y, //this should match but worst scenario I get an error :chomik_xmas: yaaah indeed was incorrect
+            1,
+            stream
+            );
+
     gpu.matmul_ver1_gpu(
             a,
             this->cudaMat,
@@ -111,19 +124,6 @@ void DenseLayer::passthrough(float* a, float* out, const cudaStream_t stream) co
             out_y,
             out_x,
             this->actv_func,
-            stream
-            );
-
-    gpu.matadd_ver1(
-            this->cudaBias,
-            a,
-            out,
-            this->biases,
-            1,
-            this->biases,
-            1,
-            out_y, //this should match but worst scenario I get an error :chomik_xmas: yaaah indeed was incorrect
-            1,
             stream
             );
 

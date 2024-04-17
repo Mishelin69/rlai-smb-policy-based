@@ -24,6 +24,9 @@ private:
     cudaStream_t stream;
 
 public:
+    friend class RLAgent;
+
+public:
 
     void init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b, const size_t neurons, 
             const size_t input, const GPU::ActivationFunction actv_func, const GPU::ActivationFunction der_actv_func);

@@ -9,6 +9,19 @@ float der_relu(const float x) {
 }
 
 __global__
+void matmul_elementwise_v1(float* a, float *b, float* c, const size_t x_max, const size_t y_max) {
+
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x < x_max && y < y_max) {
+
+        const float tmp = a[y * x_max + x] * b[y * x_max + x];
+        c[y * x_max + x] = tmp;
+    }
+}
+
+__global__
 void matmul_elementwise_DerSigmoid(float* a, float *b, float* c, const size_t x_max, const size_t y_max) {
 
     const int x = blockIdx.x * blockDim.x + threadIdx.x;

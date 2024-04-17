@@ -11,7 +11,7 @@ void matadd_v1(float* A, float* B, float* C,
 	const uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	if (x < c_col && y < c_row) {
-		C[y * c_col + x] = A[y * a_col + x] + B[y * b_col + x];
+		C[y * c_col + x] += A[y * a_col + x] + B[y * b_col + x];
 	}
 }
 
@@ -29,7 +29,7 @@ void conv_add_gpu(float* A, float* B, int a_dim, int b_dim, int bias_index) {
         const int feature_map_bias_index = bias_index;
         //printf("%d access index: %d b_dim: %d\n", y*b_dim + x, feature_map_bias_index, b_dim);
 
-        B[y*b_dim + x] = B[feature_map_bias_index] + A[y*b_dim + x];
+        B[y*b_dim + x] += B[y*b_dim + x] + A[feature_map_bias_index];
     }
 
 }

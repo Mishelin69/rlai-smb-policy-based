@@ -144,6 +144,24 @@ void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cuda
     //queue up jobs and wait for them to finish
     for (size_t i = 0; i < this->feature_maps; ++i) {
 
+        this->gpu.conv_add(
+                GPU::Tensor { 
+                this->cuda_bias, 
+                dim_x,
+                1,//1 because same bias for everything 
+                  //also bias is just 1D vector where its shape is (n,) 
+                  //where n => number of output feature maps
+                1 
+                },
+
+                GPU::Tensor {
+                out + i*dim_x*dim_y,
+                dim_x,
+                dim_y,
+                1
+                }, i, stream);
+
+
         this->gpu.conv_ver2(
                 a, 
                 GPU::Tensor { 
@@ -160,22 +178,6 @@ void ConvolutionalLayer::convolve(GPU::Tensor a, GPU::Tensor b, float* out, cuda
                 1
                 }, 0, stream);
 
-        this->gpu.conv_add(
-                GPU::Tensor { 
-                this->cuda_bias + dim_x*dim_y*i, 
-                dim_x,
-                1,//1 because same bias for everything 
-                  //also bias is just 1D vector where its shape is (n,) 
-                  //where n => number of output feature maps
-                1 
-                },
-
-                GPU::Tensor {
-                out + i*dim_x*dim_y,
-                dim_x,
-                dim_y,
-                1
-                }, i, stream);
     }
 
     //wait for the GPU to finish it's job (stream)

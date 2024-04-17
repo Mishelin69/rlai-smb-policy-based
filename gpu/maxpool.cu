@@ -62,3 +62,23 @@ void pool_ver2(const float* input, float* out, int* idx, int in_dim, int out_dim
     }
 
 }
+
+__global__
+void unpooling_v1(float* out, size_t* indices, float* loss, int output_dim, int in_dim, int pool_size) {
+
+    const int id_x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int id_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const int x = id_x % output_dim;
+    const int y = (32*id_y + id_x) / output_dim;
+
+    if (x < output_dim && y < output_dim) {
+
+        size_t index = indices[y*in_dim + x];
+
+        //uuuuuuhhhh annoying indexing, not a fan :C
+        //so it wasnt that annoying after all once you realize you already have the indexes
+        //I mean I'm quite literraly storing THE indexes into an array so ???
+        out[index] = loss[y*in_dim + x];
+    }
+}

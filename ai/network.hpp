@@ -29,64 +29,89 @@
 
 #define AGENT_NUM_ACTIONS 4
 
-const size_t CNN_L1_IN = 13;
-const size_t CNN_L1_OUT = 11;
-const size_t CNN_L1_IN_DEPTH = 1;
-const size_t CNN_L1_OUT_DEPTH = 16;
+constexpr size_t CNN_L1_IN = 13;
+constexpr size_t CNN_L1_OUT = 11;
+constexpr size_t CNN_L1_IN_DEPTH = 1;
+constexpr size_t CNN_L1_OUT_DEPTH = 16;
 
-const size_t CNN_L2_IN = 11;
-const size_t CNN_L2_OUT = 8;
-const size_t CNN_L2_IN_DEPTH = CNN_L1_OUT_DEPTH;
-const size_t CNN_L2_OUT_DEPTH = 32;
+constexpr size_t CNN_L2_IN = 11;
+constexpr size_t CNN_L2_OUT = 8;
+constexpr size_t CNN_L2_IN_DEPTH = CNN_L1_OUT_DEPTH;
+constexpr size_t CNN_L2_OUT_DEPTH = 32;
 
-const size_t CNN_L3_IN = 8;
-const size_t CNN_L3_OUT = 4;
-const size_t CNN_L3_IN_DEPTH = CNN_L2_OUT_DEPTH;
-const size_t CNN_L3_OUT_DEPTH = 32;
+constexpr size_t CNN_L3_IN = 8;
+constexpr size_t CNN_L3_OUT = 4;
+constexpr size_t CNN_L3_IN_DEPTH = CNN_L2_OUT_DEPTH;
+constexpr size_t CNN_L3_OUT_DEPTH = 32;
 
-const size_t CNN_L4_IN = 4;
-const size_t CNN_L4_OUT = 2;
-const size_t CNN_L4_IN_DEPTH = CNN_L3_OUT_DEPTH;
-const size_t CNN_L4_OUT_DEPTH = 32;
+constexpr size_t CNN_L4_IN = 4;
+constexpr size_t CNN_L4_OUT = 2;
+constexpr size_t CNN_L4_IN_DEPTH = CNN_L3_OUT_DEPTH;
+constexpr size_t CNN_L4_OUT_DEPTH = 32;
 
-const size_t CNN_L5_IN = 2;
-const size_t CNN_L5_OUT = 64;
-const size_t CNN_L5_IN_DEPTH = CNN_L4_OUT_DEPTH;
-const size_t CNN_L5_OUT_DEPTH = 1;
+constexpr size_t CNN_L5_IN = 2;
+constexpr size_t CNN_L5_OUT = 64;
+constexpr size_t CNN_L5_IN_DEPTH = CNN_L4_OUT_DEPTH;
+constexpr size_t CNN_L5_OUT_DEPTH = 1;
 //----------------================----------------
-const size_t CRITIC_L1_IN = 64;
-const size_t CRITIC_L1_OUT = 64;
-const size_t CRITIC_L1_IN_DEPTH = CNN_L5_OUT_DEPTH;
-const size_t CRITIC_L1_OUT_DEPTH = 1;
+constexpr size_t CRITIC_L1_IN = 64;
+constexpr size_t CRITIC_L1_OUT = 64;
+constexpr size_t CRITIC_L1_IN_DEPTH = CNN_L5_OUT_DEPTH;
+constexpr size_t CRITIC_L1_OUT_DEPTH = 1;
 
-const size_t CRITIC_L2_IN = 64;
-const size_t CRITIC_L2_OUT = 1;
-const size_t CRITIC_L2_IN_DEPTH = CRITIC_L1_OUT_DEPTH;
-const size_t CRITIC_L2_OUT_DEPTH = 1;
+constexpr size_t CRITIC_L2_IN = 64;
+constexpr size_t CRITIC_L2_OUT = 1;
+constexpr size_t CRITIC_L2_IN_DEPTH = CRITIC_L1_OUT_DEPTH;
+constexpr size_t CRITIC_L2_OUT_DEPTH = 1;
 //----------------================----------------
-const size_t ACTOR_L1_IN = 64;
-const size_t ACTOR_L1_OUT = 64;
-const size_t ACTOR_L1_IN_DEPTH = CNN_L5_OUT_DEPTH;
-const size_t ACTOR_L1_OUT_DEPTH = 1;
+constexpr size_t ACTOR_L1_IN = 64;
+constexpr size_t ACTOR_L1_OUT = 64;
+constexpr size_t ACTOR_L1_IN_DEPTH = CNN_L5_OUT_DEPTH;
+constexpr size_t ACTOR_L1_OUT_DEPTH = 1;
 
-const size_t ACTOR_L2_IN = 64;
-const size_t ACTOR_L2_OUT = AGENT_NUM_ACTIONS;
-const size_t ACTOR_L2_IN_DEPTH = ACTOR_L1_OUT_DEPTH;
-const size_t ACTOR_L2_OUT_DEPTH = 1;
+constexpr size_t ACTOR_L2_IN = 64;
+constexpr size_t ACTOR_L2_OUT = AGENT_NUM_ACTIONS;
+constexpr size_t ACTOR_L2_IN_DEPTH = ACTOR_L1_OUT_DEPTH;
+constexpr size_t ACTOR_L2_OUT_DEPTH = 1;
 //----------------================----------------
-const size_t cnn_activations_footprint = 
+constexpr size_t cnn_activations_footprint = 
     CNN_L1_OUT*CNN_L1_OUT*CNN_L1_OUT_DEPTH + 
     CNN_L2_OUT*CNN_L2_OUT*CNN_L2_OUT_DEPTH + 
     CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH + 
     CNN_L4_OUT*CNN_L4_OUT*CNN_L4_OUT_DEPTH + 
     CNN_L5_OUT;
 
-const size_t critic_activations_footprint = 
+constexpr size_t critic_activations_footprint = 
     CRITIC_L1_OUT + 
     CRITIC_L2_OUT;
-const size_t actor_activations_footprint = 
+constexpr size_t actor_activations_footprint = 
     ACTOR_L1_OUT + 
     ACTOR_L2_OUT;
+//----------------================----------------
+constexpr size_t critic_grad_l1 = CRITIC_L2_OUT;
+constexpr size_t critic_grad_l2 = CRITIC_L1_OUT;
+
+constexpr size_t actor_grad_l1 = CRITIC_L2_OUT;
+constexpr size_t actor_grad_l2 = CRITIC_L1_OUT;
+
+constexpr size_t cnn_grad_l1 = CNN_L5_OUT;
+constexpr size_t cnn_grad_l2 = CNN_L4_OUT*CNN_L4_OUT*CNN_L4_OUT_DEPTH;
+constexpr size_t cnn_grad_l3 = CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH;
+constexpr size_t cnn_grad_l4 = CNN_L2_OUT*CNN_L2_OUT*CNN_L2_OUT_DEPTH;
+constexpr size_t cnn_grad_l5 = CNN_L1_OUT*CNN_L1_OUT*CNN_L1_OUT_DEPTH;
+
+constexpr size_t critic_gradual_l1 = critic_grad_l1;
+constexpr size_t critic_gradual_l2 = critic_gradual_l1 + critic_grad_l2;
+
+constexpr size_t actor_gradual_l1 = actor_grad_l1;
+constexpr size_t actor_gradual_l2 = actor_gradual_l1 + actor_grad_l2;
+
+constexpr size_t cnn_gradual_l1 = cnn_grad_l1;
+constexpr size_t cnn_gradual_l2 = cnn_gradual_l1 + cnn_grad_l2;
+constexpr size_t cnn_gradual_l3 = cnn_gradual_l2 + cnn_grad_l3;
+constexpr size_t cnn_gradual_l4 = cnn_gradual_l3 + cnn_grad_l4;
+constexpr size_t cnn_gradual_l5 = cnn_gradual_l4 + cnn_grad_l5;
+constexpr size_t network_gradual = cnn_gradual_l5 + actor_gradual_l2;
 
 #include <cstdint>
 
@@ -101,6 +126,9 @@ private:
     size_t gradient_size;
     size_t input_size;
     size_t output_size;
+
+public:
+    friend class RLAgent;
 
 public:
 
@@ -134,6 +162,9 @@ private:
     size_t gradient_size;
     size_t input_size;
     size_t output_size;
+
+public:
+    friend class RLAgent;
 
 public:
 
@@ -176,6 +207,9 @@ private:
     size_t gradient_size;
     size_t input_size;
     size_t output_size;
+
+public:
+    friend class RLAgent;
 
 public:
 
@@ -241,6 +275,7 @@ class RLAgent {
     //should be of size network activations * batch_size
     float* cuda_activations;
     float* old_cuda_activations;
+    float* cuda_activation_z;
 
     //copied over from cuda_activations, this is only for comfort
     //3 extra floats wont kill anybody
@@ -256,6 +291,8 @@ class RLAgent {
 
     float* old_cuda_action_taken;
     float* cuda_action_taken;
+    float* cuda_all_prob_old;
+    float* cuda_all_prob_cur;
 
     //this is not with respect to the output, this is 
     //just for weights and biases maybe idk, 
@@ -275,6 +312,9 @@ class RLAgent {
     float* cuda_gae;
     float* sum_ppo;
     float* sum_critic_loss;
+    float* cuda_critic_mse;
+
+    float* cuda_actor_grad_wrt_in;
 
     uint32_t weights_total;
     uint32_t biases_total;
@@ -304,7 +344,7 @@ class RLAgent {
 
     private:
 
-    void passtrough(Actor& actor, ConvNetwork& conv, float* preds, float* cpu_final, uint32_t i, cudaStream_t stream);
+    void passtrough(Actor& actor, ConvNetwork& conv, float* preds, float* cpu_final, float* prob_end, uint32_t i, cudaStream_t stream);
 
     //performs Stochastic Policy Action Selection
     uint32_t pick_action(float* cpu_mem);

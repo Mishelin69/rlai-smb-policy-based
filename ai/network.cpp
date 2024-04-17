@@ -69,7 +69,8 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
                 this->copy_actor, 
                 this->copy_conv, 
                 this->old_cuda_activations + (current_frame-1) * activations_total, 
-                this->copy_final_predict_pass,
+                this->copy_final_predict_pass, 
+                cuda_all_prob_old,
                 current_frame-1,
                 this->streams[1]
             ); 
@@ -92,6 +93,7 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
             this->conv, 
             this->cuda_activations + (current_frame-1) * activations_total, 
             this->cpu_final_predict_pass,
+            cuda_all_prob_cur,
             current_frame-1,
             this->streams[0]
             );
@@ -102,8 +104,8 @@ uint32_t RLAgent::predict(const uint32_t mario_x, const uint32_t mario_y,
             [this] {
             //calc discounts and values here D:
             critic.value(
-                    this->cuda_activations + (current_frame-1) * activations_total + cnn_activations_footprint,
-                    this->cuda_activations + BATCH_SIZE * activations_total + (current_frame-1) * critic_activations_footprint, 
+                    this->cuda_activations + (current_frame-1) * (cnn_activations_footprint+actor_activations_footprint) + cnn_activations_footprint,
+                    this->cuda_activations + BATCH_SIZE * (cnn_activations_footprint+actor_activations_footprint) + (current_frame-1) * critic_activations_footprint, 
                     this->streams[2]
                     ); 
 
@@ -175,7 +177,7 @@ uint32_t RLAgent::pick_action(float* cpu_mem) {
     return actor_out - 1;
 }
 
-void RLAgent::passtrough(Actor& actor, ConvNetwork& conv, float* preds, float* cpu_final, uint32_t i, cudaStream_t stream) {
+void RLAgent::passtrough(Actor& actor, ConvNetwork& conv, float* preds, float* cpu_final, float* prob_end, uint32_t i, cudaStream_t stream) {
 
     //nah this will only work as intended, the other stuff will get coded in later 
     //like its simple I have my own reference to work with
@@ -216,6 +218,13 @@ void RLAgent::passtrough(Actor& actor, ConvNetwork& conv, float* preds, float* c
         std::cerr << "RLAgent::passtrough | Error copying data from gpu over to cpu!" << std::endl;
     }
 
+    res = cudaMemcpy(prob_end, src, sizeof(float) * AGENT_NUM_ACTIONS, cudaMemcpyDeviceToDevice);
+
+    if (res != cudaSuccess) {
+
+        std::cerr << "RLAgent::passtrough | Error copying data from gpu over to gpu!" << std::endl;
+    }
+
     cudaStreamSynchronize(stream);
     //function to perform softmax !!!
 
@@ -237,8 +246,8 @@ void RLAgent::learn() {
     //HAPPENED SINCE NO ERROR MESSAGE!
     //okay only seems to be happening in the memory sanetizer
 
-    //This will be used for Ctitic loss :)
-    auto res = gpu.memcpy_host(cuda_rewards, cpu_rewards, sizeof(float)*BATCH_SIZE);
+    //later used for critic loss
+    auto res = gpu.memcpy_device(cuda_rewards, cpu_rewards, sizeof(float)*BATCH_SIZE);
 
     if (res != cudaSuccess) {
         std::cerr << "RLAgent::learn | Error while copying memory from device to host (rewards)!" << std::endl;
@@ -252,16 +261,752 @@ void RLAgent::learn() {
         cpu_rewards[i] = running_sum;
     }
 
-    res = gpu.memcpy_device(cpu_rewards, cuda_discounted_rewards, sizeof(float)*BATCH_SIZE);
+    res = gpu.memcpy_host(cpu_rewards, cuda_discounted_rewards, sizeof(float)*BATCH_SIZE);
 
     if (res != cudaSuccess) {
         std::cerr << "RLAgent::learn | Error while copying memory from cpu to device (rewards)!" << std::endl;
     }
 
+    //DO PPO PART OF THINGS
+    GPU::Tensor gae_delta_out = GPU::Tensor {
+        this->cuda_gae_delta,
+        BATCH_SIZE,
+        1,
+        1,
+    };
+
+    GPU::Tensor rewards = GPU::Tensor {
+        this->cuda_rewards,
+        BATCH_SIZE,
+        1,
+        1,
+    };
+
+    GPU::Tensor values = GPU::Tensor {
+        this->cuda_values,
+        BATCH_SIZE,
+        1,
+        1,
+    };
+
+    gpu.gae_delta(gae_delta_out, rewards, values, RLAGENT_GAMMA, this->streams[0]);
+    cudaStreamSynchronize(streams[0]);
+
+    GPU::Tensor gae_full_out = GPU::Tensor {
+        this->cuda_gae,
+        BATCH_SIZE,
+        1,
+        1,
+    };
+
+    gpu.gae_full(gae_full_out, gae_delta_out, RLAGENT_GAMMA, RLAGENT_LAMBDA, this->streams[0]);
+    cudaStreamSynchronize(streams[0]);
+
+    GPU::Tensor out = GPU::Tensor {
+        this->cuda_ppo_objective,
+        BATCH_SIZE, 
+        1, 
+        1
+    };
+
+    GPU::Tensor prob_cur = GPU::Tensor {
+        this->cuda_all_prob_cur,
+        BATCH_SIZE*AGENT_NUM_ACTIONS, 
+        1, 
+        1
+    };
+
+    GPU::Tensor prob_prev = GPU::Tensor {
+        this->cuda_all_prob_old,
+        BATCH_SIZE*AGENT_NUM_ACTIONS, 
+        1, 
+        1
+    };
+
+
+    GPU::Tensor idx_cur = GPU::Tensor {
+        this->cuda_action_taken,
+        BATCH_SIZE, 
+        1, 
+        1
+    };
+
+    GPU::Tensor idx_prev = GPU::Tensor {
+        this->old_cuda_action_taken,
+        BATCH_SIZE, 
+        1, 
+        1
+    };
+
+    gpu.ppo(out, prob_cur, prob_prev, gae_full_out, idx_cur, idx_prev, RLAGENT_EPSILON, this->streams[0]);
+    cudaStreamSynchronize(streams[0]);
+
+    GPU::Tensor mse_out = GPU::Tensor {
+        this->cuda_critic_mse,
+        BATCH_SIZE, 
+        1, 
+        1
+    };
+
+    GPU::Tensor discounted_rewards = GPU::Tensor {
+        this->cuda_discounted_rewards,
+        BATCH_SIZE, 
+        1, 
+        1
+    };
+
+    gpu.mse_der(mse_out, discounted_rewards, values, streams[0]);
+    cudaStreamSynchronize(streams[0]);
+
+        
+    int items_per_thread = BATCH_SIZE / THREAD_POOL_SIZE;
+
+    for (uint32_t id = 0; id < THREAD_POOL_SIZE; ++id) {
+        for (uint32_t i = id*items_per_thread; i < (id+1)*items_per_thread; ++i) {
+
+            pool.detach_task([this, mse_out, i] {
+
+                cudaStream_t stream = streams[i%CUDA_STREAMS];
+
+                    //TIME FOR GRADIENT :)
+                    //critic first and then actor + cNN
+                GPU::Tensor mse = GPU::Tensor {
+                    mse_out.dat_pointer + i,
+                        1,
+                        1,
+                        1
+                };
+
+                GPU::Tensor g_loss_wrt_c_out = GPU::Tensor {
+                    cuda_gradients_with_respect_out + 
+                    BATCH_SIZE*(cnn_activations_footprint+actor_activations_footprint) +
+                    i*actor_gradual_l2,
+                    1, 
+                    1, 
+                    1,
+                };
+
+                GPU::Tensor critic_output_z = GPU::Tensor {
+                    cuda_activation_z + 
+                    BATCH_SIZE*(cnn_activations_footprint+actor_activations_footprint) +
+                    i * critic_activations_footprint - CRITIC_L2_OUT,
+                    1,
+                    1,
+                    1,
+                };
+
+                GPU::Tensor td = GPU::Tensor {
+                    cuda_gae_delta + i,
+                    1,
+                    1,
+                    1
+                };
+
+                gpu.matsub(g_loss_wrt_c_out, critic_output_z, td, stream);
+
+                //Critic output layer first
+                GPU::Tensor grad_wrt_critic_output_z = GPU::Tensor {
+                    g_loss_wrt_c_out.dat_pointer,
+                    1,
+                    1,
+                    1,
+                };
+
+                GPU::Tensor grad_wrt_critic_out_w = GPU::Tensor {
+                    cuda_critic_gradient + i*critic_gradient_size,
+                    CRITIC_L2_OUT,
+                    CRITIC_L1_OUT,
+                    1
+                };
+
+                GPU::Tensor critic_output_layer_input = GPU::Tensor {
+                    this->cuda_activations + 
+                    i*(cnn_activations_footprint+actor_activations_footprint) + 
+                    cnn_activations_footprint,
+                    CNN_L1_OUT,
+                    CNN_L2_OUT,
+                    1
+                };
+
+                gpu.vector_outer(
+                    grad_wrt_critic_out_w,
+                    critic_output_layer_input,
+                    grad_wrt_critic_output_z,
+                    stream
+                );
+
+                GPU::Tensor critic_grad_wrt_out_bias = GPU::Tensor {
+                    cuda_critic_gradient + BATCH_SIZE * critic_gradient_size + i*(CRITIC_L1_OUT + CRITIC_L2_OUT),
+                    1,
+                    1,
+                    1,
+                };
+
+                cudaMemcpy(
+                    critic_grad_wrt_out_bias.dat_pointer, 
+                    grad_wrt_critic_output_z.dat_pointer,
+                    sizeof(float),
+                    cudaMemcpyDeviceToDevice
+                );
+
+                //Critic second layer (first layer but you get it we're going backwards :))
+                
+                GPU::Tensor critic_dense_actv_z = GPU::Tensor {
+                    critic_output_z.dat_pointer - CRITIC_L1_OUT,
+                    CRITIC_L1_OUT,
+                    1,
+                    1
+                };
+
+                GPU::Tensor critic_l1_inp = GPU::Tensor {
+                    cuda_activations + i*(cnn_activations_footprint+actor_activations_footprint)+ 
+                    cnn_activations_footprint - CNN_L5_OUT,
+                    CRITIC_L1_IN,
+                    1,
+                    1
+                };
+
+                GPU::Tensor critic_l1_w = GPU::Tensor {
+                    critic.l1_64_64.cudaMat, 
+                    CRITIC_L1_IN, 
+                    CRITIC_L1_OUT,
+                    1
+                };
+
+                GPU::Tensor critic_l2_w = GPU::Tensor {
+                    critic.l2_64_1.cudaMat, 
+                    CRITIC_L2_IN, 
+                    CRITIC_L2_OUT,
+                    1
+                };
+
+                GPU::Tensor critic_l1_b = GPU::Tensor {
+                    critic.l1_64_64.cudaBias, 
+                    CRITIC_L1_IN, 
+                    CRITIC_L1_OUT,
+                    1
+                };
+
+                gpu.preactivations_dense_relu(
+                    critic_dense_actv_z,
+                    critic_l1_inp,                    
+                    critic_l1_w,
+                    critic_l1_b,
+                    stream
+                );
+
+                GPU::Tensor grad_loss_wrt_critic_dense_out = GPU::Tensor { 
+                    cuda_gradients_with_respect_out + 
+                    BATCH_SIZE*(cnn_activations_footprint+actor_activations_footprint) +
+                    i*critic_gradual_l2+critic_grad_l1,
+                    CRITIC_L1_OUT, 
+                    1, 
+                    1,
+                };
+
+                gpu.matmul_ver1_gpu(
+                    grad_wrt_critic_output_z.dat_pointer,
+                    critic_l2_w.dat_pointer,
+                    grad_loss_wrt_critic_dense_out.dat_pointer,
+                    grad_wrt_critic_output_z.dat_x,
+                    grad_wrt_critic_output_z.dat_y,
+                    critic_l2_w.dat_x,
+                    critic_l2_w.dat_y,
+                    grad_loss_wrt_critic_dense_out.dat_x,
+                    grad_loss_wrt_critic_dense_out.dat_y, 
+                    GPU::ActivationFunction::None,
+                    stream
+                );
+
+                GPU::Tensor grad_loss_wrt_critic_dense_z = GPU::Tensor {
+                    cuda_gradients_with_respect_out + 
+                    BATCH_SIZE*(cnn_activations_footprint+actor_activations_footprint) +
+                    i*critic_gradual_l2+critic_grad_l1,
+                    CRITIC_L1_OUT, 
+                    1, 
+                    1,
+                };
+
+                gpu.matmul_elementwise(
+                    grad_loss_wrt_critic_dense_out,
+                    critic_dense_actv_z,
+                    grad_loss_wrt_critic_dense_z,
+                    stream,
+                    GPU::ActivationFunction::None
+                );
+
+                GPU::Tensor grad_wrt_critic_dense_w_delta = GPU::Tensor {
+                    cuda_critic_gradient + i*critic_gradient_size + critic_grad_l1,
+                    CRITIC_L1_OUT,
+                    CNN_L5_OUT,
+                    1
+                };
+
+                gpu.vector_outer(
+                    grad_wrt_critic_dense_w_delta, 
+                    critic_l1_inp, 
+                    grad_loss_wrt_critic_dense_z, 
+                    stream
+                );
+
+                GPU::Tensor critic_grad_wrt_dense_b_delta = GPU::Tensor {
+                    cuda_critic_gradient + BATCH_SIZE * critic_gradient_size + i*(CRITIC_L1_OUT + CRITIC_L2_OUT) + CRITIC_L2_OUT,
+                    CRITIC_L1_OUT,
+                    1,
+                    1,
+                };
+
+                cudaMemcpy(
+                    critic_grad_wrt_dense_b_delta.dat_pointer, 
+                    grad_loss_wrt_critic_dense_z.dat_pointer,
+                    sizeof(float),
+                    cudaMemcpyDeviceToDevice
+                );
+
+                GPU::Tensor cnn_grad_wrt_out_critic = GPU::Tensor {
+                    cuda_gradients_with_respect_out + 
+                    i*(cnn_activations_footprint+actor_activations_footprint) +
+                    actor_gradual_l2,
+                    CRITIC_L1_IN, 
+                    1, 
+                    1,
+                };
+
+                /*
+                std::cout << "glwrt x: " << grad_loss_wrt_critic_dense_z.dat_x 
+                    << " y: " << grad_loss_wrt_critic_dense_z.dat_y << std::endl; 
+
+                std::cout << "critic_w x: " << critic_l1_w.dat_x 
+                    << " y: " << critic_l1_w.dat_y << std::endl; 
+                */
+
+                gpu.matmul_ver1_gpu(
+                    grad_loss_wrt_critic_dense_z.dat_pointer,
+                    critic_l1_w.dat_pointer,
+                    cnn_grad_wrt_out_critic.dat_pointer,
+                    grad_loss_wrt_critic_dense_z.dat_x,
+                    grad_loss_wrt_critic_dense_z.dat_y,
+                    critic_l1_w.dat_x,
+                    critic_l1_w.dat_y,
+                    grad_loss_wrt_critic_dense_out.dat_x,
+                    grad_loss_wrt_critic_dense_out.dat_y, 
+                    GPU::ActivationFunction::None,
+                    stream
+                );
+
+                //ACTOR PART (GRADIENTS YAAAY)
+                //dl/dz
+                GPU::Tensor actor_dl_dz = GPU::Tensor {
+                    cuda_gradients_with_respect_out + 
+                    i*(cnn_activations_footprint+actor_activations_footprint) +
+                    actor_gradual_l2,
+                    AGENT_NUM_ACTIONS,
+                    1, 
+                    1 
+                };
+
+                cudaMemcpy(
+                    actor_dl_dz.dat_pointer,
+                    cuda_all_prob_cur + i*AGENT_NUM_ACTIONS,
+                    sizeof(float) * AGENT_NUM_ACTIONS,
+                    cudaMemcpyDeviceToDevice
+                );
+
+                float agent_action_taken = 0;
+
+                gpu.memcpy_device(cuda_action_taken + i, &agent_action_taken, sizeof(float));
+
+                GPU::Tensor actor_dl_dz_sub_one = GPU::Tensor {
+                    actor_dl_dz.dat_pointer + (uint32_t)agent_action_taken,
+                    1,
+                    1,
+                    1,
+                };
+
+                gpu.subs_number(actor_dl_dz_sub_one, +1, stream);  
+
+                float ppo_scalar = 0.0f;
+
+                auto res = gpu.memcpy_device(cuda_ppo_objective + i, &ppo_scalar, sizeof(float));
+
+                if (res != cudaSuccess) {
+                    std::cerr << "RLAgent::learn | couldn't copy advantage scalar" << std::endl;
+                }
+
+                gpu.vector_scalar(
+                    actor_dl_dz, 
+                    actor_dl_dz, 
+                    -ppo_scalar, 
+                    stream
+                );
+
+                GPU::Tensor actor_grad_loss_actor_output_w = GPU::Tensor {
+                    cuda_actor_gradient + i*actor_gradient_size,
+                    ACTOR_L2_IN,
+                    AGENT_NUM_ACTIONS,
+                    1
+                };
+
+                GPU::Tensor actor_dense_activations = GPU::Tensor {
+                    cuda_activations + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint - ACTOR_L1_IN,
+                    ACTOR_L1_OUT,
+                    1,
+                    1
+                };
+
+                gpu.vector_outer(actor_grad_loss_actor_output_w, actor_dense_activations, actor_dl_dz, stream);
+
+                GPU::Tensor actor_grad_loss_actor_output_b = GPU::Tensor {
+                    cuda_actor_gradient + BATCH_SIZE*actor_gradient_size + i*actor_gradual_l2,
+                    AGENT_NUM_ACTIONS,
+                    1,
+                    1
+                };
+
+                res = cudaMemcpy(
+                    actor_grad_loss_actor_output_b.dat_pointer,
+                    actor_dl_dz.dat_pointer, 
+                    sizeof(float) * AGENT_NUM_ACTIONS, 
+                    cudaMemcpyDeviceToDevice
+                );
+
+                if (res != cudaSuccess) {
+                    std::cerr << "RLAgent::learn | Error while copying actor output bias gradient" << std::endl;
+                }
+
+                cudaMemcpy(
+                    cuda_gradients_with_respect_out + (i+1)*(actor_activations_footprint + cnn_activations_footprint) -
+                    AGENT_NUM_ACTIONS,
+                    actor_dl_dz.dat_pointer,
+                    sizeof(float) * AGENT_NUM_ACTIONS,
+                    cudaMemcpyDeviceToDevice
+                );
+
+                if (res != cudaSuccess) {
+                    std::cerr << "RLAgent::learn | Error while copying actor output gradient wrt its output" << std::endl;
+                }
+
+                //ACTOR SECOND LAYER :)
+                GPU::Tensor grad_loss_wrt_actor_dense_actv = GPU::Tensor {
+                    cuda_gradients_with_respect_out + (i+1)*(actor_activations_footprint + cnn_activations_footprint) -
+                    AGENT_NUM_ACTIONS - ACTOR_L1_OUT,
+                    ACTOR_L1_OUT,
+                    1,
+                    1
+                };
+
+                GPU::Tensor actor_output_w = GPU::Tensor { 
+                    actor.l2_64_4.cudaMat,
+                    ACTOR_L2_IN,
+                    ACTOR_L2_OUT,
+                    1,
+                };
+
+                gpu.matmul_ver1_gpu(
+                    actor_dl_dz.dat_pointer,
+                    actor_output_w.dat_pointer,
+                    grad_loss_wrt_actor_dense_actv.dat_pointer,
+                    actor_dl_dz.dat_x,
+                    actor_dl_dz.dat_y,
+                    actor_output_w.dat_x,
+                    actor_output_w.dat_y,
+                    grad_loss_wrt_actor_dense_actv.dat_x,
+                    grad_loss_wrt_actor_dense_actv.dat_y, 
+                    GPU::ActivationFunction::None,
+                    stream
+                );
+
+                GPU::Tensor actor_dense_input = GPU::Tensor {
+                    cuda_activations + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint - ACTOR_L1_IN,
+                    ACTOR_L1_OUT,
+                    1,
+                    1
+                };
+
+                GPU::Tensor actor_dense_preactivations = GPU::Tensor {
+                    cuda_activation_z + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint,
+                    ACTOR_L1_OUT,
+                    1,
+                    1
+                };
+
+                GPU::Tensor actor_l1_w = GPU::Tensor {
+                    actor.l1_64_64.cudaMat,
+                    ACTOR_L1_IN,
+                    ACTOR_L1_OUT,
+                    1,
+                };
+
+                GPU::Tensor actor_l1_b = GPU::Tensor {
+                    actor.l1_64_64.cudaBias,
+                    ACTOR_L1_OUT,
+                    1,
+                    1,
+                };
+
+                //compute the fing preactivations yaaay I love this so so much!
+                gpu.preactivations_dense_relu(
+                    actor_dense_preactivations, 
+                    actor_dense_input, 
+                    actor_l1_w, 
+                    actor_l1_b, 
+                    stream 
+                );
+
+                gpu.matmul_elementwise(
+                    grad_loss_wrt_actor_dense_actv, 
+                    actor_dense_input, 
+                    grad_loss_wrt_actor_dense_actv, 
+                    stream, 
+                    GPU::ActivationFunction::None
+                );
+
+                GPU::Tensor actor_dense_delta_w = GPU::Tensor {
+                    cuda_actor_gradient + i*actor_gradient_size + AGENT_NUM_ACTIONS*ACTOR_L2_IN,
+                    ACTOR_L1_IN,
+                    ACTOR_L1_OUT,
+                    1
+
+                };
+
+                gpu.vector_outer(
+                    actor_dense_delta_w, 
+                    actor_dense_input, 
+                    grad_loss_wrt_actor_dense_actv, 
+                    stream
+                );
+
+                GPU::Tensor actor_dense_delta_b = GPU::Tensor {
+                    cuda_actor_gradient + BATCH_SIZE*actor_gradient_size + i*actor_gradual_l2 + AGENT_NUM_ACTIONS,
+                    ACTOR_L1_OUT,
+                    1,
+                    1
+                };
+
+                res = cudaMemcpy(
+                    actor_dense_delta_b.dat_pointer,
+                    grad_loss_wrt_actor_dense_actv.dat_pointer, 
+                    sizeof(float) * ACTOR_L1_OUT, 
+                    cudaMemcpyDeviceToDevice
+                );
+
+
+                GPU::Tensor cnn_grad_wrt_out_actor = GPU::Tensor {
+                    cuda_actor_grad_wrt_in + i*ACTOR_L1_IN,
+                    CRITIC_L1_IN, 
+                    1, 
+                    1,
+                };
+
+                gpu.matmul_ver1_gpu(
+                    grad_loss_wrt_actor_dense_actv.dat_pointer,
+                    actor_l1_w.dat_pointer,
+                    cnn_grad_wrt_out_actor.dat_pointer,
+                    grad_loss_wrt_actor_dense_actv.dat_x,
+                    grad_loss_wrt_actor_dense_actv.dat_y,
+                    actor_l1_w.dat_x,
+                    actor_l1_w.dat_y,
+                    cnn_grad_wrt_out_actor.dat_x,
+                    cnn_grad_wrt_out_actor.dat_y, 
+                    GPU::ActivationFunction::None,
+                    stream
+                );
+
+                //OKAY CNN FINALLY
+                //aggregate stuff yk
+                gpu.matadd_ver1(
+                    cnn_grad_wrt_out_actor.dat_pointer,
+                    cnn_grad_wrt_out_critic.dat_pointer,
+                    cnn_grad_wrt_out_critic.dat_pointer,
+                    cnn_grad_wrt_out_actor.dat_x,
+                    cnn_grad_wrt_out_actor.dat_y, 
+                    cnn_grad_wrt_out_critic.dat_x,
+                    cnn_grad_wrt_out_critic.dat_y,
+                    cnn_grad_wrt_out_critic.dat_x,
+                    cnn_grad_wrt_out_critic.dat_y, 
+                    stream
+                );
+
+                //cnn dense layer
+                GPU::Tensor cnn_dense_preactivations = GPU::Tensor {
+                    cuda_activation_z + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint - CNN_L5_OUT,
+                    CNN_L5_OUT,
+                    1,
+                    1
+                };
+
+                GPU::Tensor cnn_l5_w = GPU::Tensor {
+                    conv.l5_2x2x32_64.cudaMat,
+                    CNN_L5_OUT,
+                    CNN_L5_IN*CNN_L5_IN*CNN_L5_IN_DEPTH, 
+                    1,
+                };
+
+                GPU::Tensor cnn_l5_b = GPU::Tensor {
+                    conv.l5_2x2x32_64.cudaBias,
+                    CNN_L5_OUT,
+                    1,
+                    1
+                };
+
+                GPU::Tensor cnn_l5_input = GPU::Tensor {
+                    cuda_activations + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint - CNN_L5_OUT - CNN_L4_IN*CNN_L4_IN*CNN_L4_IN_DEPTH,
+                    CNN_L5_IN*CNN_L5_IN*CNN_L5_IN_DEPTH, 
+                    1,
+                    1
+                };
+
+                gpu.preactivations_dense_relu(
+                    cnn_dense_preactivations,
+                    cnn_l5_input,
+                    cnn_l5_w,
+                    cnn_l5_b,
+                    stream
+                );
+
+                gpu.matmul_elementwise(
+                    cnn_dense_preactivations, 
+                    cnn_grad_wrt_out_critic,
+                    cnn_grad_wrt_out_critic,
+                    stream,
+                    GPU::ActivationFunction::None
+                );
+
+                GPU::Tensor cnn_dense_l5_grad_wrt_w = GPU::Tensor {
+                    cuda_cnn_gradient + i*cnn_gradient_size - 64*128, //64*128 => number of weights of the last layer
+                    64*128,
+                    1,
+                    1
+                };
+
+                GPU::Tensor cnn_dense_l5_grad_wrt_b = GPU::Tensor {
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size + i*CNN_L5_OUT,
+                    CNN_L5_OUT,
+                    1,
+                    1
+                };
+
+                //Ok so issue is that Im totally dumb and just most likely didnt notice the thing and
+                //also it seemed a bit goofy to me that it was like that
+                gpu.vector_outer(
+                    cnn_dense_l5_grad_wrt_w,
+                    cnn_l5_input,
+                    cnn_grad_wrt_out_critic,
+                    stream
+                );
+
+                res = cudaMemcpy(
+                    cnn_dense_l5_grad_wrt_b.dat_pointer,
+                    cnn_grad_wrt_out_critic.dat_pointer, 
+                    sizeof(float) * CNN_L5_OUT, 
+                    cudaMemcpyDeviceToDevice
+                );
+
+                //what am I doing man this doesnt really matter, I dont need it
+                //idk why Im doing this, just dont everwrite something :)
+                GPU::Tensor cnn_l5_grad_wrt_inp = GPU::Tensor {
+                    cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint),
+                    CNN_L5_IN*CNN_L5_IN*CNN_L5_IN_DEPTH,
+                    1,
+                    1
+                };
+
+                gpu.matmul_ver1_gpu(
+                    cnn_grad_wrt_out_critic.dat_pointer,
+                    cnn_l5_w.dat_pointer,
+                    cnn_l5_grad_wrt_inp.dat_pointer,
+                    cnn_grad_wrt_out_critic.dat_x,
+                    cnn_grad_wrt_out_critic.dat_y, 
+                    cnn_l5_w.dat_x,
+                    cnn_l5_w.dat_y,
+                    cnn_l5_grad_wrt_inp.dat_x,
+                    cnn_l5_grad_wrt_inp.dat_y, 
+                    GPU::None,
+                    stream
+                );
+
+
+                //ok now compute cnn pre activations ! yaay
+                //also this does not matter what specific index this is
+                //only things that do matter are it not interfering with other or gradients wrt w/b
+                GPU::Tensor cnn_l4_preactivations = GPU::Tensor {
+                    cuda_activation_z + i*(actor_activations_footprint + cnn_activations_footprint),
+                    CNN_L4_OUT,
+                    CNN_L4_OUT,
+                    CNN_L4_OUT_DEPTH,
+                };
+
+                GPU::Tensor cnn_l4_input = GPU::Tensor {
+                    cuda_activations + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint - CNN_L5_OUT - 128 - 
+                    CNN_L4_IN*CNN_L4_IN*CNN_L4_IN_DEPTH,
+                    CNN_L4_IN,
+                    CNN_L4_IN,
+                    CNN_L4_IN_DEPTH
+                };
+
+                GPU::Tensor cnn_l4_w = GPU::Tensor {
+                    conv.l4_4x4_32x3x3.cuda_kernel,
+                    3,
+                    3,
+                    32
+                };
+
+                GPU::Tensor cnn_l4_b = GPU::Tensor {
+                    conv.l4_4x4_32x3x3.cuda_bias,
+                    32,
+                    1,
+                    1
+                };
+
+                gpu.conv_ver2_preactivations(
+                    cnn_l4_preactivations,
+                    cnn_l4_input, 
+                    cnn_l4_w,
+                    cnn_l4_b,
+                    stream
+                );
+
+                GPU::Tensor cnn_l4_loss_wrt_inp = GPU::Tensor {
+                    cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint),
+                    128,
+                    1,
+                    1
+                };
+
+                gpu.matmul_elementwise(
+                    cnn_l4_preactivations, 
+                    cnn_l5_grad_wrt_inp, 
+                    cnn_l4_loss_wrt_inp, 
+                    stream, 
+                    GPU::None
+                );
+
+
+            });
+
+
+        }
+    }
+
+    pool.wait();
+
+    for (auto& s : streams) {
+        cudaStreamSynchronize(s);
+    }
+
+    std::cout << "Finished all training!" << std::endl;
+
     //calc softmax on ALL THE ACTIVATIONS 
     //including OLD/NEW network
     //DONT FORGET TO UPDATE OLD MODELS YK :) IDEALLY
 
+    //also reset everything pls :)
     reset_activations();
 }
 
@@ -362,24 +1107,29 @@ RLAgent::RLAgent():
                 )/4;
 
         size_t extra_mem = GPU::mem_needed_align(
-                BATCH_SIZE + //PPO Objective
-                BATCH_SIZE + //discounted rewards
-                BATCH_SIZE + //gae_lambda
-                BATCH_SIZE + //gae rewards
-                1 + 1 //sum_ppo, sum_critic_loss
+                BATCH_SIZE                     + //PPO Objective
+                BATCH_SIZE                     + //discounted rewards
+                BATCH_SIZE                     + //gae_lambda
+                BATCH_SIZE                     + //gae rewards
+                1          + 1                 +  //sum_ppo, sum_critic_loss
+                BATCH_SIZE * AGENT_NUM_ACTIONS + //OLD
+                BATCH_SIZE * AGENT_NUM_ACTIONS + //NEW
+                BATCH_SIZE                     +//MSE CRITIC 
+                BATCH_SIZE * activations_total +//no activation func output
+                BATCH_SIZE * ACTOR_L1_IN        //actor grad wrt in
                 ,
                 sizeof(float) * 4)/4;
 
         auto TOTAL_MEM_NEEDED = 
-            this->weights_total * 2 + //weight needed for network and network old
-            this->biases_total * 2 + //biases needed =||=
+            this->weights_total     * 2              + //weight needed for network and network old
+            this->biases_total      * 2              + //biases needed =||=
             this->activations_total * 2 * BATCH_SIZE + //cuda_actv_old + cuda_actv 
-            MAP_SIZE * BATCH_SIZE + //env 
-            BATCH_SIZE * 4 + //advantage, values, returns, rewards
-            grad_with_out * BATCH_SIZE + 
-            cnn_gradient_size * BATCH_SIZE +
-            critic_gradient_size * BATCH_SIZE +
-            actor_gradient_size * BATCH_SIZE +
+            MAP_SIZE                * BATCH_SIZE     + //env 
+            BATCH_SIZE              * 4              + //advantage, values, returns, rewards
+            grad_with_out           * BATCH_SIZE     + 
+            cnn_gradient_size       * BATCH_SIZE     +
+            critic_gradient_size    * BATCH_SIZE     +
+            actor_gradient_size     * BATCH_SIZE     +
             extra_mem; 
 
         std::cout << "biases total: " << biases_total << std::endl;
@@ -549,6 +1299,31 @@ RLAgent::RLAgent():
         this->sum_critic_loss = sum_critic_loss;
 
         p_offset += 1;
+
+        float* actions_old = big_block + p_offset;
+        this->cuda_all_prob_old = actions_old;
+
+        p_offset += BATCH_SIZE * AGENT_NUM_ACTIONS;
+
+        float* actions_cur = big_block + p_offset;
+        this->cuda_all_prob_cur = actions_cur;
+
+        p_offset += BATCH_SIZE * AGENT_NUM_ACTIONS;
+
+        float* mse_critic = big_block + p_offset;
+        this->cuda_critic_mse = mse_critic;
+
+        p_offset += BATCH_SIZE;
+
+        float* activation_z = big_block + p_offset;
+        this->cuda_activation_z = activation_z;
+
+        p_offset += BATCH_SIZE * activations_total;
+
+        float* actor_grad_wrt_in = big_block + p_offset;
+        this->cuda_actor_grad_wrt_in = actor_grad_wrt_in;
+
+        p_offset += BATCH_SIZE * ACTOR_L1_IN;
 
         //Ill just alloc separately idc 
         this->reset_activations();
@@ -851,7 +1626,7 @@ void Critic::init_self(GPU::Device& gpu, float* cuda_w, float* cuda_b) {
     biases_offset += l1_neurons;
 
     l2_64_1.init_self(gpu, cuda_w + weights_offset, cuda_b + biases_offset, 
-            l2_neurons, l2_input, GPU::ActivationFunction::ReLU, GPU::ActivationFunction::DerReLU);
+            l2_neurons, l2_input, GPU::ActivationFunction::None, GPU::ActivationFunction::DerReLU);
 
 }
 
@@ -963,4 +1738,3 @@ void Actor::act(float* cnn_processed, float* out, cudaStream_t stream) {
 
     cudaStreamSynchronize(stream);
 }
-

@@ -310,6 +310,78 @@ void conv_ReLU2(float* k, float* a, float* out, int k_size,
         }
 
         //printf("x: %d y: %d | o_x: %d o_y: %d | out: %d| n: %f\n", x, y, id_x, id_y, y * out_size + x, sum);
-        out[y * out_size + x] = (sum > 0) ? sum : 0.0;
+        out[y * out_size + x] = (sum+out[y * out_size + x] > 0) ? sum+out[y * out_size + x] : 0.0;
+    }
+}
+
+__global__
+void conv_pre(float* k, float* a, float* out, int k_size, 
+        int a_size,  int out_size, int n_elms) {
+
+    const int id_x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int id_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const int x = id_x % out_size;
+    const int y = (32*id_y + id_x) / out_size;
+
+    if (x < out_size && y < out_size) {
+
+        float sum = 0.0f;
+
+        for (int n = 0; n < n_elms; ++n) {
+            for (int i = 0; i < k_size; ++i) {
+                for (int j = 0; j < k_size; ++j) {
+
+                    int k_idx = n*k_size*k_size + i*k_size + j;
+                    int i_idx = n*a_size*a_size + y*a_size + i*a_size + x + j;
+
+                    //printf("k: %f a: %f | %d %d | %d %d\n", k[k_idx], a[i_idx], k_idx, i_idx, x, y);
+                    sum += k[k_idx] * a[i_idx];
+
+                }
+            }
+        }
+
+        //printf("x: %d y: %d | o_x: %d o_y: %d | out: %d| n: %f\n", x, y, id_x, id_y, y * out_size + x, sum);
+        out[y * out_size + x] = (sum+out[y * out_size + x] > 0) ? 1 : 0.0;
+    }
+}
+
+__global__
+void full_conv_v1(float* k, float* a, float* out, int k_size, int a_size,  int out_size, int n_elms) {
+
+    const int id_x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int id_y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const int x = id_x % out_size;
+    const int y = (32*id_y + id_x) / out_size;
+
+    if (x < out_size && y < out_size) {
+
+        float sum = 0.0f;
+
+        for (int n = 0; n < n_elms; ++n) {
+            for (int i = 0; i < k_size; ++i) {
+                for (int j = 0; j < k_size; ++j) {
+
+                    //reverse convolution (cross corellation)
+                    int k_idx = n*k_size*k_size + k_size*k_size - (i*k_size + j);
+                    int i_idx = 
+                        (n*a_size*a_size + y*a_size + i*a_size + x + j) 
+                        - (k_size - 1 - j) //horizontal offset
+                        - (a_size * (k_size - 1 - j));
+
+                    //printf("k: %f a: %f | %d %d | %d %d\n", k[k_idx], a[i_idx], k_idx, i_idx, x, y);
+                    
+                    if (i_idx >= n*a_size*a_size && i_idx < (n+1)*a_size*a_size) {
+                        sum += k[k_idx] * a[i_idx];
+                    }
+
+                }
+            }
+        }
+
+        //printf("x: %d y: %d | o_x: %d o_y: %d | out: %d| n: %f\n", x, y, id_x, id_y, y * out_size + x, sum);
+        out[y * out_size + x] = sum + out[y * out_size + x];
     }
 }

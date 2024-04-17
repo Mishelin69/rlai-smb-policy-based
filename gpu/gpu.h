@@ -214,13 +214,21 @@ public:
 
     void conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaStream_t stream);
 
+    void conv_ver2_preactivations(Tensor out, Tensor inp, Tensor weights, Tensor bias, cudaStream_t stream);
+
+    void full_convolution(Tensor out, Tensor inp, Tensor weights, cudaStream_t stream);
+
     void conv_add(Tensor a, Tensor b, int bias_index, cudaStream_t stream);
 
     //This is where I actually started using brain instead of being dumb :)
+    //(I was talking about the usage of the type GPU::Tensor in favor of just (type* dat_ptr, dat size, dat size)
+    //Funny this function has never been used because it was like really stupid
     void batched_max_pool_ver1(const Tensor input, Tensor out, size_t* idx_ptr, 
             const size_t pool_size, const cudaStream_t stream) const noexcept;
 
     void max_pool_ver2(const Tensor input, Tensor out, int* idx, const int pool_size, cudaStream_t stream);
+
+    void max_pool_der(Tensor out, Tensor loss, size_t* indices);
 
     void matmul_elementwise(Tensor a, Tensor b, Tensor out, 
             const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept;
@@ -228,9 +236,31 @@ public:
     //general advantage estimation
     void gae_delta(Tensor out, const GPU::Tensor rewards, const GPU::Tensor values,
                 const float gamma, const cudaStream_t stream); 
+
+    //Performs general advantage estimation on TDs with given parameters
+    void gae_full(Tensor out, Tensor td_delta, float gamma, float lambda, cudaStream_t stream);
+
+    //Perform PPO
+    void ppo(Tensor out, Tensor prob_cur, Tensor prob_prev, Tensor adv, Tensor idx_cur, 
+            Tensor idx_prev, float epsilon, cudaStream_t stream);
+
+    //performs mean squared error (1/N)(A - B)^2
+    void mse(Tensor out, Tensor a, Tensor b, cudaStream_t stream);
+
+
+    void mse_der(Tensor out, Tensor a, Tensor b, cudaStream_t stream);
+
+    void preactivations_dense_relu(Tensor out, Tensor inp, Tensor weights, Tensor bias, cudaStream_t stream);
+
+    void matsub(Tensor out, Tensor a, Tensor b, cudaStream_t stream);
+
+    void vector_outer(Tensor out, Tensor a, Tensor b, cudaStream_t stream);
+
+    void vector_scalar(Tensor out, Tensor a, float scalar, cudaStream_t stream);
+
+    void subs_number(Tensor a, float scalar, cudaStream_t stream);
 };
 
 }
-
 
 static GPU::Device DummyDevice(0);
