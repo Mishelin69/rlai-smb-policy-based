@@ -998,6 +998,10 @@ void RLAgent::learn() {
                     GPU::None
                 );
 
+                cnn_l4_loss_wrt_inp.dat_x = CNN_L4_OUT;
+                cnn_l4_loss_wrt_inp.dat_y = CNN_L4_OUT;
+                cnn_l4_loss_wrt_inp.dat_z = CNN_L4_OUT_DEPTH;
+
                 
                 GPU::Tensor cnn_l4_gradient_wrt_w = GPU::Tensor {
                     cuda_cnn_gradient + i*cnn_gradient_size + 64*128, //64*128 => number of weights of the last layer
@@ -1032,7 +1036,7 @@ void RLAgent::learn() {
                     cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint) + 130 + CNN_L4_IN*CNN_L4_IN*CNN_L4_IN_DEPTH,
                     CNN_L3_IN,
                     CNN_L3_IN,
-                    CNN_L3_OUT
+                    CNN_L3_IN_DEPTH
                 };
 
                 int* indices = conv.l3_8x8_2x2.cuda_idx + i*CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH;
@@ -1082,9 +1086,9 @@ void RLAgent::learn() {
 
                 GPU::Tensor cnn_l2_loss_wrt_inp = GPU::Tensor {
                     cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint),
-                    CNN_L2_IN,
-                    CNN_L2_IN,
-                    CNN_L2_IN_DEPTH
+                    CNN_L2_IN*CNN_L2_IN*CNN_L2_IN_DEPTH,
+                    1,
+                    1
                 };
 
                 GPU::Tensor cnn_l2_gradient_wrt_b = GPU::Tensor {
@@ -1105,6 +1109,9 @@ void RLAgent::learn() {
                     GPU::None
                 );
 
+                cnn_l2_loss_wrt_inp.dat_x = CNN_L2_OUT;
+                cnn_l2_loss_wrt_inp.dat_y = CNN_L2_OUT;
+                cnn_l2_loss_wrt_inp.dat_z = CNN_L2_OUT_DEPTH;
                 
                 GPU::Tensor cnn_l2_gradient_wrt_w = GPU::Tensor {
                     cuda_cnn_gradient + i*cnn_gradient_size + 64*128 + 2*2*32, //64*128 => number of weights of the last layer
@@ -1177,9 +1184,9 @@ void RLAgent::learn() {
 
                 GPU::Tensor cnn_l1_loss_wrt_inp = GPU::Tensor {
                     cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint),
-                    CNN_L1_IN,
-                    CNN_L1_IN,
-                    CNN_L1_IN_DEPTH
+                    CNN_L1_IN*CNN_L1_IN*CNN_L1_IN_DEPTH,
+                    1,
+                    1
                 };
 
                 GPU::Tensor cnn_l1_gradient_wrt_b = GPU::Tensor {
@@ -1201,12 +1208,15 @@ void RLAgent::learn() {
                     GPU::None
                 );
 
+                cnn_l1_loss_wrt_inp.dat_x = CNN_L1_OUT;
+                cnn_l1_loss_wrt_inp.dat_y = CNN_L1_OUT;
+                cnn_l1_loss_wrt_inp.dat_z = CNN_L1_OUT_DEPTH;
                 
                 GPU::Tensor cnn_l1_gradient_wrt_w = GPU::Tensor {
                     cuda_cnn_gradient + i*cnn_gradient_size + 64*128 + 2*2*32 + 4*4*32, //64*128 => number of weights of the last layer
-                    4,
-                    4,
-                    32
+                    3,
+                    3,
+                    16
                 };
 
                 gpu.conv_ver2_all(
@@ -1217,8 +1227,6 @@ void RLAgent::learn() {
                 );
 
             });
-
-
         }
     }
 

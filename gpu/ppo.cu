@@ -14,7 +14,7 @@ void ppo_v1(float* out, float* prob, float* prob_old, float* adv, float* idx_cur
 
         float pred_cur = prob[(int)idx_cur[nth_elm]];
         float pred_prev = prob_old[(int)idx_prev[nth_elm]];
-
+        
         float rt = pred_cur / pred_prev;
         float advantage = adv[nth_elm];
 

@@ -365,7 +365,7 @@ void full_conv_v1(float* k, float* a, float* out, int k_size, int a_size,  int o
                 for (int j = 0; j < k_size; ++j) {
 
                     //reverse convolution (cross corellation)
-                    int k_idx = n*k_size*k_size + k_size*k_size - (i*k_size + j);
+                    int k_idx = n*k_size*k_size + i*k_size + j;
                     int i_idx = 
                         (n*a_size*a_size + y*a_size + i*a_size + x + j) 
                         - (k_size - 1 - j) //horizontal offset

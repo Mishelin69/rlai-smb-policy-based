@@ -642,7 +642,7 @@ void GPU::Device::conv_ver2(Tensor a, Tensor b, Tensor out, uint32_t skip, cudaS
 
     if (!GPU::Device::validate_convolution(b.dat_x, a.dat_x, out.dat_x)) {
 
-        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        std::cerr << "CR2: Error: invalid function parameters! hint: out_dim" << std::endl;
         return;
     }
 
@@ -667,7 +667,7 @@ void GPU::Device::conv_ver2_preactivations(Tensor out, Tensor inp, Tensor weight
 
     if (!GPU::Device::validate_convolution(weights.dat_x, inp.dat_x, out.dat_x)) {
 
-        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        std::cerr << "CV2PA: Error: invalid function parameters! hint: out_dim" << std::endl;
         return;
     }
 
@@ -727,7 +727,10 @@ void GPU::Device::conv_ver2_all(Tensor out, Tensor inp,
 
     if (!GPU::Device::validate_convolution(weights.dat_x, inp.dat_x, out.dat_x)) {
 
-        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        std::cerr << "CV2A: Error: invalid function parameters! hint: out_dim" << std::endl;
+        std::cout << "w: " << weights.dat_x << std::endl;
+        std::cout << "i: " << inp.dat_x << std::endl;
+        std::cout << "o: " << out.dat_x << std::endl;
         return;
     }
 
@@ -748,7 +751,7 @@ void GPU::Device::conv_ver2_all(Tensor out, Tensor inp,
 
     for (int i = 0; i < out.dat_z; ++i) {
         conv_ReLU2<<<grid_dimensions, block_dimensions, 0, stream>>>(
-            weights.dat_pointer+i*weights.dat_x*weights.dat_y, 
+            weights.dat_pointer+i*weights.dat_x, 
             inp.dat_pointer, 
             out.dat_pointer, 
             weights.dat_x, 
@@ -765,11 +768,13 @@ void full_conv_v1(float* k, float* a, float* out, int k_size,
 
 void GPU::Device::full_convolution(Tensor out, Tensor inp, Tensor weights, cudaStream_t stream) {
 
+    //Safe uncomment I hope D:
+    /*
     if (!GPU::Device::validate_convolution(weights.dat_x, inp.dat_x, out.dat_x)) {
 
-        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        std::cerr << "FC1: Error: invalid function parameters! hint: out_dim" << std::endl;
         return;
-    }
+    }*/
 
     const size_t elm_total = out.dat_y * out.dat_x;
     const size_t elm_y = ceilf(elm_total / 32.0);
@@ -879,11 +884,12 @@ void matmul_elementwise_v1(float* a, float *b, float* c, const size_t x_max, con
 void GPU::Device::matmul_elementwise(Tensor a, Tensor b, Tensor out, 
         const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept {
 
+    /*
     if (out.dat_x % 32 != 0) {
 
         std::cerr << "GPU::Device::matmul_elementwise | Dims not a multiple of 32!!!" << std::endl;
         return;
-    }
+    }*/
 
     size_t elm1 = a.dat_y*a.dat_x*a.dat_z;
     size_t elm2 = b.dat_y*b.dat_x*b.dat_z;
