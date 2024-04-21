@@ -878,14 +878,15 @@ void RLAgent::learn() {
                 );
 
                 GPU::Tensor cnn_dense_l5_grad_wrt_w = GPU::Tensor {
-                    cuda_cnn_gradient + i*cnn_gradient_size - 64*128, //64*128 => number of weights of the last layer
+                    cuda_cnn_gradient + i*cnn_gradient_size, //64*128 => number of weights of the last layer
                     64*128,
                     1,
                     1
                 };
 
                 GPU::Tensor cnn_dense_l5_grad_wrt_b = GPU::Tensor {
-                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size + i*CNN_L5_OUT,
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size + 
+                    i*cnn_gradual_l5,
                     CNN_L5_OUT,
                     1,
                     1
@@ -922,8 +923,8 @@ void RLAgent::learn() {
                     cnn_l5_grad_wrt_inp.dat_pointer,
                     cnn_grad_wrt_out_critic.dat_x,
                     cnn_grad_wrt_out_critic.dat_y, 
-                    cnn_l5_w.dat_x,
                     cnn_l5_w.dat_y,
+                    cnn_l5_w.dat_x,
                     cnn_l5_grad_wrt_inp.dat_x,
                     cnn_l5_grad_wrt_inp.dat_y, 
                     GPU::None,
@@ -979,6 +980,16 @@ void RLAgent::learn() {
                     1
                 };
 
+                GPU::Tensor cnn_l4_gradient_wrt_b = GPU::Tensor {
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size + i*cnn_gradual_l5 + CNN_L5_OUT_DEPTH,
+                    32,
+                    1,
+                    1
+
+                };
+
+                gpu.sum_bias_cnn(cnn_l4_gradient_wrt_b, cnn_l5_grad_wrt_inp, 3, stream);
+
                 gpu.matmul_elementwise(
                     cnn_l4_preactivations, 
                     cnn_l5_grad_wrt_inp, 
@@ -987,6 +998,223 @@ void RLAgent::learn() {
                     GPU::None
                 );
 
+                
+                GPU::Tensor cnn_l4_gradient_wrt_w = GPU::Tensor {
+                    cuda_cnn_gradient + i*cnn_gradient_size + 64*128, //64*128 => number of weights of the last layer
+                    3,
+                    3,
+                    32
+                };
+
+                gpu.conv_ver2_all(
+                    cnn_l4_gradient_wrt_w, 
+                    cnn_l4_input, 
+                    cnn_l4_loss_wrt_inp, 
+                    stream
+                );
+
+                GPU::Tensor cnn_l4_g_wrt_inp_f = GPU::Tensor {
+                    cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint) + 130,
+                    CNN_L4_IN,
+                    CNN_L4_IN,
+                    CNN_L4_IN_DEPTH,
+                };
+
+                gpu.full_convolution(
+                    cnn_l4_g_wrt_inp_f, 
+                    cnn_l4_loss_wrt_inp, 
+                    cnn_l4_w, 
+                    stream
+                );
+
+                //max pooling
+                GPU::Tensor cnn_l3_g_wrt_inp = GPU::Tensor {
+                    cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint) + 130 + CNN_L4_IN*CNN_L4_IN*CNN_L4_IN_DEPTH,
+                    CNN_L3_IN,
+                    CNN_L3_IN,
+                    CNN_L3_OUT
+                };
+
+                int* indices = conv.l3_8x8_2x2.cuda_idx + i*CNN_L3_OUT*CNN_L3_OUT*CNN_L3_OUT_DEPTH;
+
+                gpu.max_pool_der(cnn_l3_g_wrt_inp, cnn_l4_g_wrt_inp_f, indices, stream); 
+                
+                //cnn 2
+                
+                GPU::Tensor cnn_l2_preactivations = GPU::Tensor {
+                    cuda_activation_z + i*(actor_activations_footprint + cnn_activations_footprint),
+                    CNN_L2_OUT,
+                    CNN_L2_OUT,
+                    CNN_L2_OUT_DEPTH,
+                };
+
+                GPU::Tensor cnn_l2_input = GPU::Tensor {
+                    cuda_activations + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint - CNN_L5_OUT - 128 - 
+                    CNN_L4_IN*CNN_L4_IN*CNN_L4_IN_DEPTH - CNN_L3_IN*CNN_L3_IN*CNN_L3_IN_DEPTH -
+                    CNN_L2_IN*CNN_L2_IN*CNN_L2_IN_DEPTH,
+                    CNN_L2_IN,
+                    CNN_L2_IN,
+                    CNN_L2_IN_DEPTH
+                };
+
+                GPU::Tensor cnn_l2_w = GPU::Tensor {
+                    conv.l2_11x11_32x4x4.cuda_kernel,
+                    4,
+                    4,
+                    32
+                };
+
+                GPU::Tensor cnn_l2_b = GPU::Tensor {
+                    conv.l2_11x11_32x4x4.cuda_bias,
+                    32,
+                    1,
+                    1
+                };
+
+                gpu.conv_ver2_preactivations(
+                    cnn_l2_preactivations,
+                    cnn_l2_input, 
+                    cnn_l2_w,
+                    cnn_l2_b,
+                    stream
+                );
+
+                GPU::Tensor cnn_l2_loss_wrt_inp = GPU::Tensor {
+                    cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint),
+                    CNN_L2_IN,
+                    CNN_L2_IN,
+                    CNN_L2_IN_DEPTH
+                };
+
+                GPU::Tensor cnn_l2_gradient_wrt_b = GPU::Tensor {
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size + i*cnn_gradual_l5 + CNN_L5_OUT_DEPTH + CNN_L3_OUT_DEPTH,
+                    32,
+                    1,
+                    1
+
+                };
+
+                gpu.sum_bias_cnn(cnn_l2_gradient_wrt_b, cnn_l3_g_wrt_inp, 4, stream);
+
+                gpu.matmul_elementwise(
+                    cnn_l2_preactivations, 
+                    cnn_l3_g_wrt_inp, 
+                    cnn_l2_loss_wrt_inp, 
+                    stream, 
+                    GPU::None
+                );
+
+                
+                GPU::Tensor cnn_l2_gradient_wrt_w = GPU::Tensor {
+                    cuda_cnn_gradient + i*cnn_gradient_size + 64*128 + 2*2*32, //64*128 => number of weights of the last layer
+                    4,
+                    4,
+                    32
+                };
+
+                gpu.conv_ver2_all(
+                    cnn_l2_gradient_wrt_w, 
+                    cnn_l2_input, 
+                    cnn_l2_loss_wrt_inp, 
+                    stream
+                );
+
+                GPU::Tensor cnn_l2_g_wrt_inp_f = GPU::Tensor {
+                    cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint) + 130,
+                    CNN_L2_IN,
+                    CNN_L2_IN,
+                    CNN_L2_IN_DEPTH,
+                };
+
+                gpu.full_convolution(
+                    cnn_l2_g_wrt_inp_f, 
+                    cnn_l2_loss_wrt_inp, 
+                    cnn_l2_w, 
+                    stream
+                );
+                
+                //cnn 1
+
+                 GPU::Tensor cnn_l1_preactivations = GPU::Tensor {
+                    cuda_activation_z + i*(actor_activations_footprint + cnn_activations_footprint),
+                    CNN_L1_OUT,
+                    CNN_L1_OUT,
+                    CNN_L1_OUT_DEPTH,
+                };
+
+                GPU::Tensor cnn_l1_input = GPU::Tensor {
+                    cuda_activations + i*(actor_activations_footprint + cnn_activations_footprint) +
+                    cnn_activations_footprint - CNN_L5_OUT - 128 - 
+                    CNN_L4_IN*CNN_L4_IN*CNN_L4_IN_DEPTH - CNN_L3_IN*CNN_L3_IN*CNN_L3_IN_DEPTH -
+                    CNN_L2_IN*CNN_L2_IN*CNN_L2_IN_DEPTH - CNN_L1_IN*CNN_L1_IN*CNN_L1_IN_DEPTH,
+                    CNN_L1_IN,
+                    CNN_L1_IN,
+                    CNN_L1_IN_DEPTH
+                };
+
+                GPU::Tensor cnn_l1_w = GPU::Tensor {
+                    conv.l1_13x13_16x3x3.cuda_kernel,
+                    3,
+                    3,
+                    16
+                };
+
+                GPU::Tensor cnn_l1_b = GPU::Tensor {
+                    conv.l1_13x13_16x3x3.cuda_bias,
+                    16,
+                    1,
+                    1
+                };
+
+                gpu.conv_ver2_preactivations(
+                    cnn_l1_preactivations,
+                    cnn_l1_input, 
+                    cnn_l1_w,
+                    cnn_l1_b,
+                    stream
+                );
+
+                GPU::Tensor cnn_l1_loss_wrt_inp = GPU::Tensor {
+                    cuda_gradients_with_respect_out + i*(actor_activations_footprint + cnn_activations_footprint),
+                    CNN_L1_IN,
+                    CNN_L1_IN,
+                    CNN_L1_IN_DEPTH
+                };
+
+                GPU::Tensor cnn_l1_gradient_wrt_b = GPU::Tensor {
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size + i*cnn_gradual_l5 + 
+                    CNN_L5_OUT_DEPTH + CNN_L3_OUT_DEPTH + CNN_L2_OUT_DEPTH,
+                    16,
+                    1,
+                    1
+
+                };
+
+                gpu.sum_bias_cnn(cnn_l1_gradient_wrt_b, cnn_l2_g_wrt_inp_f, 3, stream);
+
+                gpu.matmul_elementwise(
+                    cnn_l1_preactivations, 
+                    cnn_l2_g_wrt_inp_f, 
+                    cnn_l1_loss_wrt_inp, 
+                    stream, 
+                    GPU::None
+                );
+
+                
+                GPU::Tensor cnn_l1_gradient_wrt_w = GPU::Tensor {
+                    cuda_cnn_gradient + i*cnn_gradient_size + 64*128 + 2*2*32 + 4*4*32, //64*128 => number of weights of the last layer
+                    4,
+                    4,
+                    32
+                };
+
+                gpu.conv_ver2_all(
+                    cnn_l1_gradient_wrt_w, 
+                    cnn_l1_input, 
+                    cnn_l1_loss_wrt_inp, 
+                    stream
+                );
 
             });
 

@@ -14,6 +14,8 @@ private:
 
     GPU::Device& gpu = DummyDevice;
 
+    friend class RLAgent;
+
 public:
 
     void init_self(GPU::Device& gpu, int pool_size, uint32_t n_inputs, uint32_t in_size);

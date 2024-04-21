@@ -216,6 +216,8 @@ public:
 
     void conv_ver2_preactivations(Tensor out, Tensor inp, Tensor weights, Tensor bias, cudaStream_t stream);
 
+    void conv_ver2_all(Tensor out, Tensor inp, Tensor weights, cudaStream_t stream);
+
     void full_convolution(Tensor out, Tensor inp, Tensor weights, cudaStream_t stream);
 
     void conv_add(Tensor a, Tensor b, int bias_index, cudaStream_t stream);
@@ -228,7 +230,7 @@ public:
 
     void max_pool_ver2(const Tensor input, Tensor out, int* idx, const int pool_size, cudaStream_t stream);
 
-    void max_pool_der(Tensor out, Tensor loss, size_t* indices);
+    void max_pool_der(Tensor out, Tensor loss, int* indices, cudaStream_t stream);
 
     void matmul_elementwise(Tensor a, Tensor b, Tensor out, 
             const cudaStream_t stream, const ActivationFunction actv_fn) const noexcept;
@@ -257,6 +259,8 @@ public:
     void vector_outer(Tensor out, Tensor a, Tensor b, cudaStream_t stream);
 
     void vector_scalar(Tensor out, Tensor a, float scalar, cudaStream_t stream);
+
+    void sum_bias_cnn(Tensor out, Tensor a, int filter_size, cudaStream_t stream);
 
     void subs_number(Tensor a, float scalar, cudaStream_t stream);
 };

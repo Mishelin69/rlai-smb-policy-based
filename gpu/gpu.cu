@@ -722,6 +722,43 @@ void GPU::Device::conv_ver2_preactivations(Tensor out, Tensor inp, Tensor weight
     }
 }
 
+void GPU::Device::conv_ver2_all(Tensor out, Tensor inp, 
+        Tensor weights, cudaStream_t stream) {
+
+    if (!GPU::Device::validate_convolution(weights.dat_x, inp.dat_x, out.dat_x)) {
+
+        std::cerr << "Error: invalid function parameters! hint: out_dim" << std::endl;
+        return;
+    }
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+    //=======//
+    //  ++i  //
+    // i+=1  //
+    //=======//
+    //  i++  //
+    //   i   //
+    // i+=1  //
+    //=======//
+
+    for (int i = 0; i < out.dat_z; ++i) {
+        conv_ReLU2<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            weights.dat_pointer+i*weights.dat_x*weights.dat_y, 
+            inp.dat_pointer, 
+            out.dat_pointer, 
+            weights.dat_x, 
+            inp.dat_x, 
+            out.dat_x, 
+            weights.dat_z 
+        );
+    }
+}
+
 __global__
 void full_conv_v1(float* k, float* a, float* out, int k_size, 
         int a_size,  int out_size, int n_elms);
@@ -812,9 +849,9 @@ void GPU::Device::max_pool_ver2(const GPU::Tensor input, GPU::Tensor out, int* i
 }
 
 __global__
-void unpooling_v1(float* out, size_t* indices, float* loss, int output_dim, int in_dim, int pool_size); 
+void unpooling_v1(float* out, int* indices, float* loss, int output_dim, int in_dim, int pool_size); 
 
-void GPU::Device::max_pool_der(Tensor out, Tensor loss, size_t* indices) {
+void GPU::Device::max_pool_der(Tensor out, Tensor loss, int* indices, cudaStream_t stream) {
 
     const size_t elm_total = out.dat_y * out.dat_x;
     const size_t elm_y = ceilf(elm_total / 32.0);
@@ -823,7 +860,10 @@ void GPU::Device::max_pool_der(Tensor out, Tensor loss, size_t* indices) {
     dim3 block_dimensions(32, elm_y, 1);
 
     for (size_t i = 0; i < out.dat_z; ++i) {
-
+        unpooling_v1<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            out.dat_pointer+i*elm_total, indices+i*(loss.dat_x*loss.dat_y), 
+            loss.dat_pointer+i*(loss.dat_x*loss.dat_y), out.dat_x, loss.dat_x, 2
+            );
     }
 }
 
@@ -1130,4 +1170,29 @@ void GPU::Device::subs_number(Tensor a, float scalar, cudaStream_t stream) {
     if (status != cudaSuccess) {
         std::cerr << "GPU::Device::subs_number | Error copying data GPU -> CPU" << std::endl;
     }
+}
+
+__global__ 
+void sum_vector_one(float* out, float* a, int n_items);
+
+__global__ 
+void sum_bias_conv(float* out, float* a, int filter_size, int n_items);
+
+
+void GPU::Device::sum_bias_cnn(Tensor out, Tensor a, int filter_size, cudaStream_t stream) {
+
+    const size_t elm_total = out.dat_y * out.dat_x;
+    const size_t elm_y = ceilf(elm_total / 32.0);
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, elm_y, 1);
+
+
+    sum_bias_conv<<<grid_dimensions, block_dimensions, 0, stream>>>(
+            out.dat_pointer,
+            a.dat_pointer,
+            filter_size,
+            elm_total
+            );
+
 }

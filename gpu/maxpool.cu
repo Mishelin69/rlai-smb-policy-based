@@ -64,7 +64,7 @@ void pool_ver2(const float* input, float* out, int* idx, int in_dim, int out_dim
 }
 
 __global__
-void unpooling_v1(float* out, size_t* indices, float* loss, int output_dim, int in_dim, int pool_size) {
+void unpooling_v1(float* out, int* indices, float* loss, int output_dim, int in_dim, int pool_size) {
 
     const int id_x = blockIdx.x * blockDim.x + threadIdx.x;
     const int id_y = blockIdx.y * blockDim.y + threadIdx.y;
