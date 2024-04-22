@@ -7,6 +7,11 @@
 void RLAgent::reset_activations() {
 
     auto res = this->gpu.memset(this->cuda_activations, 0.0, activations_total * BATCH_SIZE);
+    this->gpu.memset(this->cuda_activation_z, 0.0, activations_total * BATCH_SIZE);
+    this->gpu.memset(this->cuda_actor_gradient, 0.0, actor_gradient_size * BATCH_SIZE);
+    this->gpu.memset(this->cuda_critic_gradient, 0.0, critic_gradient_size * BATCH_SIZE);
+    this->gpu.memset(this->cuda_cnn_gradient, 0.0, cnn_gradient_size * BATCH_SIZE);
+    this->gpu.memset(this->cuda_gradients_with_respect_out, 0.0, grad_with_out * BATCH_SIZE);
 
     if (res != cudaSuccess) {
 
@@ -1225,6 +1230,152 @@ void RLAgent::learn() {
                     cnn_l1_loss_wrt_inp, 
                     stream
                 );
+
+            });
+        }
+    }
+
+    pool.wait();
+
+    for (auto& s : streams) {
+        cudaStreamSynchronize(s);
+    }
+
+    for (uint32_t id = 0; id < THREAD_POOL_SIZE; ++id) {
+        for (uint32_t i = id*items_per_thread; i < (id+1)*items_per_thread; ++i) {
+
+            pool.detach_task([this, mse_out, i] {
+
+                cudaStream_t stream = streams[i%CUDA_STREAMS];
+
+                gpu.matadd_ver1_simple( 
+                    critic.l2_64_1.cudaMat,
+                    cuda_critic_gradient + i*critic_gradient_size,
+                    critic.l2_64_1.cudaMat,
+                    64, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    critic.l1_64_64.cudaMat,
+                    cuda_critic_gradient + i*critic_gradient_size +64,
+                    critic.l1_64_64.cudaMat,
+                    64*64, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    critic.l2_64_1.cudaBias,
+                    cuda_critic_gradient + BATCH_SIZE*critic_gradient_size
+                    + i*(64+1),
+                    critic.l2_64_1.cudaBias,
+                    1, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    critic.l1_64_64.cudaBias,
+                    cuda_critic_gradient + BATCH_SIZE*critic_gradient_size
+                    + i*(64+1)+1,
+                    critic.l1_64_64.cudaBias,
+                    64, 1,
+                    stream);
+
+                //ACTOR
+
+                gpu.matadd_ver1_simple( 
+                    actor.l2_64_4.cudaMat,
+                    cuda_actor_gradient + i*actor_gradient_size,
+                    actor.l2_64_4.cudaMat,
+                    64*4, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    actor.l1_64_64.cudaMat,
+                    cuda_actor_gradient + i*actor_gradient_size + 64*4,
+                    actor.l1_64_64.cudaMat,
+                    64*64, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    actor.l2_64_4.cudaBias,
+                    cuda_actor_gradient + BATCH_SIZE*actor_gradient_size
+                    + i*(64+4),
+                    actor.l1_64_64.cudaBias,
+                    4, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    actor.l1_64_64.cudaBias,
+                    cuda_actor_gradient + BATCH_SIZE*actor_gradient_size
+                    + i*(64+4)+4,
+                    actor.l1_64_64.cudaBias,
+                    64, 1,
+                    stream);
+
+                //CNN
+                
+                //L5
+                gpu.matadd_ver1_simple( 
+                    conv.l5_2x2x32_64.cudaMat,
+                    cuda_cnn_gradient + i*cnn_gradient_size,
+                    conv.l5_2x2x32_64.cudaMat,
+                    128*64, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    conv.l5_2x2x32_64.cudaBias,
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size
+                    + i*(64+32+32+32+16),
+                    conv.l5_2x2x32_64.cudaBias,
+                    64, 1,
+                    stream);
+
+                //L4
+                gpu.matadd_ver1_simple( 
+                    conv.l4_4x4_32x3x3.cuda_kernel,
+                    cuda_cnn_gradient + i*cnn_gradient_size+128*64,
+                    conv.l4_4x4_32x3x3.cuda_kernel,
+                    32*3*3, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    conv.l4_4x4_32x3x3.cuda_bias,
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size
+                    + i*(64+32+32+32+16) + 64,
+                    conv.l4_4x4_32x3x3.cuda_bias,
+                    32, 1,
+                    stream);
+
+                //L2
+                gpu.matadd_ver1_simple( 
+                    conv.l2_11x11_32x4x4.cuda_kernel,
+                    cuda_cnn_gradient + i*cnn_gradient_size+128*64+32*3*3,
+                    conv.l2_11x11_32x4x4.cuda_kernel,
+                    32*4*4, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    conv.l2_11x11_32x4x4.cuda_bias,
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size
+                    + i*(64+32+32+32+16) + 64 + 32,
+                    conv.l2_11x11_32x4x4.cuda_bias,
+                    32, 1,
+                    stream);
+
+                //L1
+                gpu.matadd_ver1_simple( 
+                    conv.l1_13x13_16x3x3.cuda_kernel,
+                    cuda_cnn_gradient + i*cnn_gradient_size+128*64+32*3*3+32*4*4,
+                    conv.l1_13x13_16x3x3.cuda_kernel,
+                    16*3*3, 1,
+                    stream);
+
+                gpu.matadd_ver1_simple( 
+                    conv.l1_13x13_16x3x3.cuda_bias,
+                    cuda_cnn_gradient + BATCH_SIZE*cnn_gradient_size
+                    + i*(64+32+32+32+16) + 64 + 32 + 32,
+                    conv.l1_13x13_16x3x3.cuda_bias,
+                    16, 1,
+                    stream);
+
 
             });
         }

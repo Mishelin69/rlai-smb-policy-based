@@ -33,3 +33,17 @@ void conv_add_gpu(float* A, float* B, int a_dim, int b_dim, int bias_index) {
     }
 
 }
+
+__global__
+void matadd_v1_simple(float* A, float* B, float* C,
+	size_t a_col, size_t a_row) {
+
+	const uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
+	const uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	if (x < a_col && y < a_row) {
+        float add =- B[y * a_col + x] * 0.9f; 
+        atomicAdd(&(C[y * a_col + x]), add);
+        printf("NEW PUK: %f\n", C[y * a_col + x]);
+	}
+}

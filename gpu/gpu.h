@@ -203,6 +203,9 @@ public:
             size_t a_row, size_t b_col, size_t b_row, 
             size_t c_col, size_t c_row, const cudaStream_t stream) const noexcept;
 
+    void matadd_ver1_simple(float* a, float* b, float* c, 
+        size_t a_col, size_t a_row, const cudaStream_t stream) const noexcept;
+
     void conv_ver1(const float* kernel, const float* dat, float* output, 
             const size_t kernel_dim, const size_t dat_dim, 
             const size_t out_dim, ActivationFunction actv_fn) const noexcept;

@@ -558,6 +558,20 @@ void GPU::Device::matadd_ver1(float* a, float* b, float* c,
 }
 
 __global__
+void matadd_v1_simple(float* A, float* B, float* C,
+	size_t a_col, size_t a_row);
+
+void GPU::Device::matadd_ver1_simple(float* a, float* b, float* c, 
+        size_t a_col, size_t a_row, const cudaStream_t stream) const noexcept {
+
+    dim3 grid_dimensions(1, 1, 1);
+    dim3 block_dimensions(32, ceilf((a_row * a_col) / 32.0), 1);
+
+    matadd_v1_simple<<<grid_dimensions, block_dimensions, 0, stream>>>
+        (a, b, c, a_col, a_row);
+}
+
+__global__
 void convolve_v1(const float* k, const float* m, float* o, int kx, int mx, int ox);
 __global__
 void convolve_v1_ReLU(const float* k, const float* m, float* o, int kx, int mx, int ox);
